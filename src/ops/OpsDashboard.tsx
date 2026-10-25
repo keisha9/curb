@@ -11,7 +11,7 @@ import { APP_NAME, TIME_ZONE } from "../../shared/config";
 // Local only: matches OPS_KEY on Convex. Never in the hosted build (see .env.example).
 const OPS_KEY = (import.meta.env.VITE_OPS_KEY as string | undefined) ?? "";
 // Where the QR code points: the hosted trips site, else this dashboard's own address.
-const TRIPS_URL = ((import.meta.env.VITE_TRIPS_URL as string | undefined) ?? `${window.location.origin}/trips`).replace(/\/$/, "");
+const TRIPS_URL = ((import.meta.env.VITE_TRIPS_URL as string | undefined) ?? `${window.location.origin}/trips`);
 
 const STATUS_STYLE: Record<string, string> = {
   collecting: "bg-slate-100 text-slate-700",
