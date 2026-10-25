@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { assertOps, vOpsKey } from "./lib/ops";
 import { internalMutation, internalQuery, query, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -206,8 +207,9 @@ export const openForRide = internalQuery({
 
 /** Calls for a ride with their transcript lines, oldest first. */
 export const byRide = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, { rideId }) => {
+  args: { opsKey: vOpsKey, rideId: v.id("rides") },
+  handler: async (ctx, { opsKey, rideId }) => {
+    assertOps(opsKey);
     const calls = await ctx.db
       .query("calls")
       .withIndex("by_ride", (q) => q.eq("rideId", rideId))
@@ -227,8 +229,9 @@ export const byRide = query({
 
 /** Most recent calls across all rides (inbound calls may not have a ride yet). */
 export const recent = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) => {
+  args: { opsKey: vOpsKey, limit: v.optional(v.number()) },
+  handler: async (ctx, { opsKey, limit }) => {
+    assertOps(opsKey);
     const calls = await ctx.db.query("calls").order("desc").take(Math.min(limit ?? 10, 50));
     return await Promise.all(
       calls.map(async (c) => ({

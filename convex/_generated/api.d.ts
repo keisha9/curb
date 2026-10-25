@@ -21,6 +21,7 @@ import type * as http from "../http.js";
 import type * as lib_brainTools from "../lib/brainTools.js";
 import type * as lib_cartesia from "../lib/cartesia.js";
 import type * as lib_llm from "../lib/llm.js";
+import type * as lib_ops from "../lib/ops.js";
 import type * as lib_outbound from "../lib/outbound.js";
 import type * as lib_policy from "../lib/policy.js";
 import type * as lib_safety from "../lib/safety.js";
@@ -63,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   "lib/brainTools": typeof lib_brainTools;
   "lib/cartesia": typeof lib_cartesia;
   "lib/llm": typeof lib_llm;
+  "lib/ops": typeof lib_ops;
   "lib/outbound": typeof lib_outbound;
   "lib/policy": typeof lib_policy;
   "lib/safety": typeof lib_safety;

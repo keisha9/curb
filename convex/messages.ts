@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { assertOps, vOpsKey } from "./lib/ops";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { vLang } from "./schema";
 import { logEvent } from "./events";
@@ -39,8 +40,9 @@ export const templatesSent = internalQuery({
 
 /** Ops dashboard: texts sent for a ride. */
 export const byRide = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, { rideId }) => {
+  args: { opsKey: vOpsKey, rideId: v.id("rides") },
+  handler: async (ctx, { opsKey, rideId }) => {
+    assertOps(opsKey);
     return await ctx.db
       .query("messages")
       .withIndex("by_ride", (q) => q.eq("rideId", rideId))

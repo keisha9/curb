@@ -15,6 +15,7 @@ const JAMES = "+13105550102";
 const ROSA = "+13105550103";
 const BROKER = "+13105550199";
 const STRANGER = "+13105550177";
+const OPS = "test-ops-key";
 
 // Friday Oct 23 2026, 1 PM in Los Angeles.
 const START = new Date("2026-10-23T20:00:00Z");
@@ -69,7 +70,7 @@ async function callsOf(t: T, rideId: Id<"rides">) {
 
 /** Seed, book Maria's ride, and have the broker confirm it. */
 async function bookMaria(t: T, settle: () => Promise<void>) {
-  await t.mutation(api.demo.seed, {});
+  await t.mutation(api.demo.seed, { opsKey: OPS });
   await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
   await settle();
   const ride = await rideFor(t, MARIA);
@@ -83,6 +84,7 @@ beforeEach(() => {
   vi.setSystemTime(START);
   process.env.ALLOWED_OUTBOUND_NUMBERS = [MARIA, JAMES, ROSA, BROKER].join(",");
   process.env.PORTAL_BASE_URL = "https://demo.test";
+  process.env.OPS_KEY = OPS;
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.CARTESIA_API_KEY;
   delete process.env.TWILIO_ACCOUNT_SID;
@@ -95,7 +97,7 @@ afterEach(() => {
 describe("booking", () => {
   test("inbound Spanish call -> broker call -> booked -> Spanish SMS with link", async () => {
     const { t, settle } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     // The demo runs English-only for now; the Spanish path stays supported and tested.
     await t.run(async (ctx) => {
       const maria = await ctx.db
@@ -140,7 +142,7 @@ describe("booking", () => {
     expect(sms[0]!.body).toMatch(/^Su transporte a Demo Dialysis Center esta reservado\. Recogida .*7:30.*Confirmacion TR4821\. Vea sus viajes: https:\/\/demo\.test\/trips\?t=[0-9a-f]{48}$/);
 
     // The decision log reads as a story.
-    const log = await t.query(api.events.byRide, { rideId: ride._id });
+    const log = await t.query(api.events.byRide, { opsKey: OPS, rideId: ride._id });
     const kinds = log.map((e) => e.kind);
     expect(kinds).toContain("policy_check");
     expect(kinds).toContain("decision");
@@ -149,7 +151,7 @@ describe("booking", () => {
 
   test("expired paperwork (Rosa): declined gently, no broker call, ineligible SMS", async () => {
     const { t, settle } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     const res = (await t.action(internal.sim.riderBooks, { phone: ROSA, appointmentAt: APPT })) as {
       eligibility: { valid: boolean; say: string };
       submit: unknown;
@@ -165,7 +167,7 @@ describe("booking", () => {
 
   test("unknown caller is declined and nothing is created", async () => {
     const { t } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     const route = await t.mutation(internal.voiceTools.routeInbound, { externalCallId: "v1", callerNumber: STRANGER });
     expect(route.kind).toBe("unknown");
     const rides = await t.run(async (ctx) => await ctx.db.query("rides").collect());
@@ -174,7 +176,7 @@ describe("booking", () => {
 
   test("confirmation gate: no rider yes, no request and no booking call", async () => {
     const { t, settle } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     const res = (await t.action(internal.sim.riderBooks, { phone: JAMES, appointmentAt: APPT, confirm: false })) as {
       submit: { ok: boolean };
     };
@@ -191,14 +193,14 @@ describe("booking", () => {
   test("allowlist: SMS and calls to unlisted numbers are blocked and logged", async () => {
     const { t, settle } = setup();
     process.env.ALLOWED_OUTBOUND_NUMBERS = MARIA; // broker line not listed
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
     await settle();
     const ride = await rideFor(t, MARIA);
     // No broker call went out; the rider (allowlisted) is called back that a person will help.
     expect((await callsOf(t, ride._id)).map((c) => c.role)).toEqual(["rider_inbound", "rider_callback"]);
     expect(ride.status).toBe("needs_human");
-    const errors = (await t.query(api.events.byRide, { rideId: ride._id })).filter((e) => e.kind === "error");
+    const errors = (await t.query(api.events.byRide, { opsKey: OPS, rideId: ride._id })).filter((e) => e.kind === "error");
     expect(errors.some((e) => e.summary.includes("not in ALLOWED_OUTBOUND_NUMBERS"))).toBe(true);
   });
 });
@@ -208,7 +210,7 @@ describe("delay reported by the rider", () => {
     const { t, settle } = setup();
     const rideId = await bookMaria(t, settle);
     const member = await t.run(async (ctx) => (await ctx.db.get(rideId))!.memberId);
-    const token = await t.mutation(api.demo.openTripsLink, { memberId: member });
+    const token = await t.mutation(api.demo.openTripsLink, { opsKey: OPS, memberId: member });
 
     vi.setSystemTime(DURING_WINDOW);
     let trips = (await t.query(api.portal.trips, { token }))!;
@@ -272,11 +274,11 @@ describe("delay reported by the rider", () => {
     const { t, settle } = setup();
     const rideId = await bookMaria(t, settle);
     vi.setSystemTime(DURING_WINDOW);
-    await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 10 });
-    const second = await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 10 });
+    await t.mutation(api.demo.simulateDelay, { opsKey: OPS, rideId, as: "rider", delayMinutes: 10 });
+    const second = await t.mutation(api.demo.simulateDelay, { opsKey: OPS, rideId, as: "rider", delayMinutes: 10 });
     expect(second.outcome).toBe("duplicate");
     await settle();
-    const reports = await t.query(api.delays.byRide, { rideId });
+    const reports = await t.query(api.delays.byRide, { opsKey: OPS, rideId });
     expect(reports.map((r) => r.ignoredReason ?? "evaluated")).toEqual(["evaluated", "duplicate"]);
   });
 });
@@ -306,7 +308,7 @@ describe("delay reported by the broker", () => {
     expect(roles).toContain("rider_callback");
     expect(roles).not.toContain("broker_delay");
     expect(await texts(t, rideId)).toEqual(["booked:stubbed", "replacement:stubbed"]);
-    const reports = await t.query(api.delays.byRide, { rideId });
+    const reports = await t.query(api.delays.byRide, { opsKey: OPS, rideId });
     expect(reports[0]).toMatchObject({ reportedBy: "broker", channel: "broker_call" });
   });
 
@@ -335,7 +337,7 @@ describe("delay reported by the broker", () => {
     const { t, settle } = setup();
     const rideId = await bookMaria(t, settle);
     vi.setSystemTime(DURING_WINDOW);
-    await t.mutation(api.demo.simulateDelay, { as: "broker", delayMinutes: 20 });
+    await t.mutation(api.demo.simulateDelay, { opsKey: OPS, as: "broker", delayMinutes: 20 });
     await settle();
     expect((await rideFor(t, MARIA)).status).toBe("recovery_calling");
     expect((await callsOf(t, rideId)).map((c) => c.role)).toContain("broker_delay");
@@ -356,7 +358,7 @@ describe("delay reported by the broker", () => {
     });
     await settle();
     vi.advanceTimersByTime(30 * 60_000);
-    await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 40 });
+    await t.mutation(api.demo.simulateDelay, { opsKey: OPS, rideId, as: "rider", delayMinutes: 40 });
     await settle();
     const ride = await rideFor(t, MARIA);
     expect(ride.status).toBe("needs_human");
@@ -365,7 +367,7 @@ describe("delay reported by the broker", () => {
 
   test("a confirmation number misheard with a dash still matches when the broker calls in", async () => {
     const { t, settle } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
     await settle();
     const rideId = (await rideFor(t, MARIA))._id;
@@ -389,6 +391,16 @@ describe("delay reported by the broker", () => {
   });
 });
 
+describe("ops key", () => {
+  test("dashboard queries and demo controls refuse a missing or wrong key", async () => {
+    const { t } = setup();
+    await expect(t.query(api.demo.state, { opsKey: "wrong" })).rejects.toThrow(/Ops key/);
+    await expect(t.mutation(api.demo.reset, { opsKey: "" })).rejects.toThrow(/Ops key/);
+    delete process.env.OPS_KEY; // unset on the server: everything is refused
+    await expect(t.mutation(api.demo.seed, { opsKey: OPS })).rejects.toThrow(/Ops key/);
+  });
+});
+
 describe("rider website scoping", () => {
   test("a token sees only its member's trips, and expired or junk tokens see nothing", async () => {
     const { t, settle } = setup();
@@ -399,7 +411,7 @@ describe("rider website scoping", () => {
         .withIndex("by_phone", (q) => q.eq("phone", JAMES))
         .first())!._id,
     );
-    const jamesToken = await t.mutation(api.demo.openTripsLink, { memberId: jamesId });
+    const jamesToken = await t.mutation(api.demo.openTripsLink, { opsKey: OPS, memberId: jamesId });
 
     const trips = (await t.query(api.portal.trips, { token: jamesToken }))!;
     expect(trips.past).toHaveLength(1);
@@ -417,7 +429,7 @@ describe("rider website scoping", () => {
 describe("English end to end (James)", () => {
   test("book -> rider calls, no minutes, past the threshold -> replacement -> English callback and SMS", async () => {
     const { t, settle } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     await t.action(internal.sim.riderBooks, { phone: JAMES, appointmentAt: APPT });
     await settle();
     const rideId = (await rideFor(t, JAMES))._id;
@@ -490,7 +502,7 @@ describe("clock rules for broker reports", () => {
 
     const second = await t.mutation(internal.voiceTools.reportDelayBroker, { callId, delayMinutes: 25 });
     expect(second.say).toContain("urgent replacement");
-    const reports = await t.query(api.delays.byRide, { rideId });
+    const reports = await t.query(api.delays.byRide, { opsKey: OPS, rideId });
     expect(reports.map((x) => [x.ignoredReason ?? "evaluated", x.evaluation?.action])).toEqual([
       ["evaluated", "verify_with_broker"],
       ["evaluated", "request_urgent_replacement"],
@@ -527,7 +539,7 @@ describe("missed calls", () => {
 
   test("broker misses the booking call twice -> retried once after 2 minutes, then a person", async () => {
     const { t, settle } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
     await settle();
     const rideId = (await rideFor(t, MARIA))._id;
@@ -565,7 +577,7 @@ describe("missed calls", () => {
     await endUnanswered(t, rideId, "rider_callback");
     await settle();
     expect((await callsOf(t, rideId)).filter((c) => c.role === "rider_callback")).toHaveLength(2);
-    const log = await t.query(api.events.byRide, { rideId });
+    const log = await t.query(api.events.byRide, { opsKey: OPS, rideId });
     expect(log.some((e) => e.summary.includes("Rider not reached"))).toBe(true);
     expect((await rideFor(t, MARIA)).status).toBe("booked"); // the ride itself is fine
   });
@@ -574,7 +586,7 @@ describe("missed calls", () => {
     const { t, settle } = setup();
     const rideId = await bookMaria(t, settle);
     vi.setSystemTime(DURING_WINDOW);
-    await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 25 });
+    await t.mutation(api.demo.simulateDelay, { opsKey: OPS, rideId, as: "rider", delayMinutes: 25 });
     await settle();
     await endUnanswered(t, rideId, "broker_delay");
     await settle();
@@ -601,7 +613,7 @@ describe("Cartesia webhooks (payload shapes from a real call)", () => {
   test("inbound call: started -> identify -> numeric-id turns -> completed -> summary, one call row", async () => {
     process.env.VOICE_WEBHOOK_SECRET = SECRET;
     const { t } = setup();
-    await t.mutation(api.demo.seed, {});
+    await t.mutation(api.demo.seed, { opsKey: OPS });
     const ev = (body: string) => post(t, "/voice/events", body, { "X-Webhook-Secret": SECRET });
 
     await ev(event("call_started", { body: null, call: { id: CALL, telephony_params: { from: MARIA, to: "+16627802148", direction: "inbound" }, status: "started" } }));

@@ -94,7 +94,7 @@ npm run dev        # prints a Local and a Network URL
 - **Ops dashboard:** `/ops`: ride board, live call transcripts, delay reports, decision log, demo controls, and a **QR code** for a rider's trips page.
 - **Rider trips site:** `/trips?t=<token>`: opened by scanning that QR code.
 
-Open the dashboard at the **Network** URL (not `localhost`) so the QR code points somewhere a phone on the same Wi-Fi can reach.
+The trips site is hosted on GitHub Pages at https://keisha9.github.io/project-name/trips (deployed on every push to `main`), so the QR code works on any network. The ops dashboard runs only locally and needs `VITE_OPS_KEY` in your `.env` to match `OPS_KEY` on Convex (`npx convex env set OPS_KEY ...`).
 
 ### Try the flow in text (Phase 1)
 

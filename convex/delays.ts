@@ -1,4 +1,5 @@
 import { v, type Infer } from "convex/values";
+import { assertOps, vOpsKey } from "./lib/ops";
 import { internalMutation, query, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -190,8 +191,9 @@ export const report = internalMutation({
 
 /** Ops dashboard: delay reports with who reported, channel, and the policy evaluation. */
 export const byRide = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, { rideId }) => {
+  args: { opsKey: vOpsKey, rideId: v.id("rides") },
+  handler: async (ctx, { opsKey, rideId }) => {
+    assertOps(opsKey);
     return await ctx.db
       .query("delayReports")
       .withIndex("by_ride", (q) => q.eq("rideId", rideId))

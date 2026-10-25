@@ -8,6 +8,11 @@ import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { APP_NAME, TIME_ZONE } from "../../shared/config";
 
+// Local only: matches OPS_KEY on Convex. Never in the hosted build (see .env.example).
+const OPS_KEY = (import.meta.env.VITE_OPS_KEY as string | undefined) ?? "";
+// Where the QR code points: the hosted trips site, else this dashboard's own address.
+const TRIPS_URL = ((import.meta.env.VITE_TRIPS_URL as string | undefined) ?? `${window.location.origin}/trips`).replace(/\/$/, "");
+
 const STATUS_STYLE: Record<string, string> = {
   collecting: "bg-slate-100 text-slate-700",
   needs_info: "bg-slate-100 text-slate-700",
@@ -67,8 +72,8 @@ function Panel({ title, children, right }: { title: string; children: React.Reac
 type LiveRide = Doc<"rides"> & { memberName: string; brokerName: string | null };
 
 export function OpsDashboard() {
-  const rides = useQuery(api.rides.listLive) as LiveRide[] | undefined;
-  const state = useQuery(api.demo.state);
+  const rides = useQuery(api.rides.listLive, { opsKey: OPS_KEY }) as LiveRide[] | undefined;
+  const state = useQuery(api.demo.state, { opsKey: OPS_KEY });
   const [picked, setPicked] = useState<Id<"rides"> | null>(null);
 
   // Follow the newest non-past ride unless the operator picked one.
@@ -84,8 +89,11 @@ export function OpsDashboard() {
             Call <span className="font-mono font-semibold">{state.systemNumber}</span>
           </span>
         )}
-        <span className="text-sm text-slate-500">Demo only · fake data · no login</span>
+        <span className="text-sm text-slate-500">Demo only · fake data</span>
       </header>
+      {!OPS_KEY && (
+        <div className="bg-red-50 px-6 py-2 text-red-800">VITE_OPS_KEY is not set in your local .env, so the dashboard cannot load data.</div>
+      )}
 
       <main className="grid gap-4 p-4 lg:grid-cols-[22rem_1fr_20rem]">
         <div className="space-y-4">
@@ -132,11 +140,11 @@ export function OpsDashboard() {
 }
 
 function RideDetail({ rideId }: { rideId: Id<"rides"> }) {
-  const data = useQuery(api.rides.get, { rideId });
-  const events = useQuery(api.events.byRide, { rideId });
-  const calls = useQuery(api.calls.byRide, { rideId });
-  const reports = useQuery(api.delays.byRide, { rideId });
-  const usage = useQuery(api.usage.byRide, { rideId });
+  const data = useQuery(api.rides.get, { opsKey: OPS_KEY, rideId });
+  const events = useQuery(api.events.byRide, { opsKey: OPS_KEY, rideId });
+  const calls = useQuery(api.calls.byRide, { opsKey: OPS_KEY, rideId });
+  const reports = useQuery(api.delays.byRide, { opsKey: OPS_KEY, rideId });
+  const usage = useQuery(api.usage.byRide, { opsKey: OPS_KEY, rideId });
   if (!data) return <Panel title="Ride">Loading…</Panel>;
   const { ride, member, broker } = data;
   const tokens = (usage ?? []).reduce((n, u) => n + u.inputTokens + u.outputTokens, 0);
@@ -260,7 +268,7 @@ function CallTranscript({ call }: { call: CallWithLines }) {
 
 /** Shown before any ride exists: the latest calls, e.g. an inbound call still collecting details. */
 function LiveCalls() {
-  const calls = useQuery(api.calls.recent, { limit: 3 }) as CallWithLines[] | undefined;
+  const calls = useQuery(api.calls.recent, { opsKey: OPS_KEY, limit: 3 }) as CallWithLines[] | undefined;
   return (
     <Panel title="Latest calls">
       {!calls?.length ? <p className="text-slate-500">No calls yet.</p> : <div className="space-y-4">{calls.map((c) => <CallTranscript key={c._id} call={c} />)}</div>}
@@ -279,14 +287,14 @@ function TripsLinkPanel({ members }: { members: { id: Id<"members">; name: strin
     if (!memberId && members[0]) setMemberId(members[0].id);
   }, [members, memberId]);
 
-  const localhost = useMemo(() => ["localhost", "127.0.0.1"].includes(window.location.hostname), []);
+  const localhost = useMemo(() => /\/\/(localhost|127\.0\.0\.1)[:/]/.test(TRIPS_URL), []);
 
   async function make() {
     if (!memberId) return;
     setError(null);
     try {
-      const token = await openLink({ memberId });
-      setUrl(`${window.location.origin}/trips?t=${token}`);
+      const token = await openLink({ opsKey: OPS_KEY, memberId });
+      setUrl(`${TRIPS_URL}?t=${token}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -327,8 +335,7 @@ function TripsLinkPanel({ members }: { members: { id: Id<"members">; name: strin
         )}
         {localhost && url && (
           <p className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">
-            This page is open on localhost, so a phone can't reach the QR link. Open the dashboard at your computer's network address instead (the
-            "Network" URL that <code>npm run dev</code> prints), on the same Wi-Fi.
+            This QR link points at localhost, so a phone can't open it. Set VITE_TRIPS_URL to the hosted trips site in your local .env.
           </p>
         )}
         {error && <p className="text-sm text-red-700">{error}</p>}
@@ -370,7 +377,7 @@ function DemoControls({ rideId, delayMinutes, brokerLine }: { rideId: Id<"rides"
               max={240}
               defaultValue={delayMinutes}
               key={delayMinutes}
-              onBlur={(e) => run("Delay minutes", () => setMinutes({ delayMinutes: Number(e.target.value) }))}
+              onBlur={(e) => run("Delay minutes", () => setMinutes({ opsKey: OPS_KEY, delayMinutes: Number(e.target.value) }))}
               className="w-20 rounded-md border border-slate-300 px-2 py-1"
             />
             minutes late
@@ -380,7 +387,7 @@ function DemoControls({ rideId, delayMinutes, brokerLine }: { rideId: Id<"rides"
               <button
                 key={as}
                 disabled={!rideId}
-                onClick={() => run(`Delay as ${as}`, () => simulate({ rideId: rideId ?? undefined, as }))}
+                onClick={() => run(`Delay as ${as}`, () => simulate({ opsKey: OPS_KEY, rideId: rideId ?? undefined, as }))}
                 className="flex-1 rounded-md bg-orange-600 px-3 py-1.5 font-semibold text-white hover:bg-orange-700 disabled:opacity-40"
               >
                 As {as}
@@ -393,19 +400,19 @@ function DemoControls({ rideId, delayMinutes, brokerLine }: { rideId: Id<"rides"
           <div className="mb-1 text-sm font-semibold">Broker line</div>
           <div className="flex gap-2">
             <input value={line} onChange={(e) => setLineDraft(e.target.value)} className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 font-mono text-sm" />
-            <button onClick={() => run("Broker line", () => setLine({ phone: line }))} className="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50">
+            <button onClick={() => run("Broker line", () => setLine({ opsKey: OPS_KEY, phone: line }))} className="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50">
               Save
             </button>
           </div>
         </div>
 
         <div className="flex gap-2">
-          <button onClick={() => run("Seed", () => seed({}))} className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
+          <button onClick={() => run("Seed", () => seed({ opsKey: OPS_KEY }))} className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-50">
             Seed
           </button>
           {confirmReset ? (
             <button
-              onClick={() => run("Reset", async () => (await reset({}), setConfirmReset(false)))}
+              onClick={() => run("Reset", async () => (await reset({ opsKey: OPS_KEY }), setConfirmReset(false)))}
               className="flex-1 rounded-md bg-red-600 px-3 py-1.5 font-semibold text-white hover:bg-red-700"
             >
               Confirm reset

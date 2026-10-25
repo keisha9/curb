@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { assertOps, vOpsKey } from "./lib/ops";
 import { internalMutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { vRideStatus } from "./schema";
@@ -80,8 +81,9 @@ export async function rideByConfirmation(ctx: QueryCtx, confirmationNumber: stri
 // ---- Ops dashboard queries ----
 
 export const listLive = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { opsKey: vOpsKey},
+  handler: async (ctx, { opsKey }) => {
+    assertOps(opsKey);
     const rides = await ctx.db.query("rides").order("desc").take(50);
     return await Promise.all(
       rides.map(async (r) => {
@@ -94,8 +96,9 @@ export const listLive = query({
 });
 
 export const get = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, { rideId }) => {
+  args: { opsKey: vOpsKey, rideId: v.id("rides") },
+  handler: async (ctx, { opsKey, rideId }) => {
+    assertOps(opsKey);
     const ride = await ctx.db.get(rideId);
     if (!ride) return null;
     const member = await ctx.db.get(ride.memberId);

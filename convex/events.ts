@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { assertOps, vOpsKey } from "./lib/ops";
 import { internalMutation, query, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { vBilingual, vEventKind } from "./schema";
@@ -37,8 +38,9 @@ export const log = internalMutation({
 
 /** Ops dashboard decision log for one ride. */
 export const byRide = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, { rideId }) => {
+  args: { opsKey: vOpsKey, rideId: v.id("rides") },
+  handler: async (ctx, { opsKey, rideId }) => {
+    assertOps(opsKey);
     return await ctx.db
       .query("agentEvents")
       .withIndex("by_ride", (q) => q.eq("rideId", rideId))
@@ -49,8 +51,9 @@ export const byRide = query({
 
 /** Ops dashboard global feed. */
 export const recent = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) => {
+  args: { opsKey: vOpsKey, limit: v.optional(v.number()) },
+  handler: async (ctx, { opsKey, limit }) => {
+    assertOps(opsKey);
     return await ctx.db
       .query("agentEvents")
       .withIndex("by_created")

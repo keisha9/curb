@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { assertOps, vOpsKey } from "./lib/ops";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 
 export const record = internalMutation({
@@ -30,8 +31,9 @@ export const rideTotal = internalQuery({
 
 /** Per-ride token usage for the ops dashboard (P1 cost display). */
 export const byRide = query({
-  args: { rideId: v.id("rides") },
-  handler: async (ctx, { rideId }) => {
+  args: { opsKey: vOpsKey, rideId: v.id("rides") },
+  handler: async (ctx, { opsKey, rideId }) => {
+    assertOps(opsKey);
     return await ctx.db
       .query("llmUsage")
       .withIndex("by_ride", (q) => q.eq("rideId", rideId))

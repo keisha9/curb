@@ -2,6 +2,7 @@
 // ops dashboard itself (documented in README "Known limitations"). Fake data only.
 
 import { v } from "convex/values";
+import { assertOps, vOpsKey } from "./lib/ops";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { vReportedBy } from "./schema";
@@ -84,8 +85,9 @@ async function addPastTrip(
 
 /** Loads fake members, brokers, and past trips. Safe to run again: members and brokers are upserted by phone. */
 export const seed = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { opsKey: vOpsKey},
+  handler: async (ctx, { opsKey }) => {
+    assertOps(opsKey);
     const now = Date.now();
     const phones = seedPhones();
 
@@ -174,8 +176,9 @@ const RESET_TABLES = ["rides", "calls", "transcriptLines", "delayReports", "agen
 
 /** Clears rides, calls, transcripts, reports, events, texts, tokens, and usage. Keeps members and brokers. */
 export const reset = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { opsKey: vOpsKey},
+  handler: async (ctx, { opsKey }) => {
+    assertOps(opsKey);
     const counts: Record<string, number> = {};
     for (const table of RESET_TABLES) {
       const rows = await ctx.db.query(table).collect();
@@ -189,8 +192,9 @@ export const reset = mutation({
 });
 
 export const state = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { opsKey: vOpsKey},
+  handler: async (ctx, { opsKey }) => {
+    assertOps(opsKey);
     const s = await ctx.db.query("demoState").first();
     const members = await ctx.db.query("members").collect();
     const voice = await ctx.db.query("voiceConfig").first();
@@ -207,11 +211,13 @@ export const state = query({
 /** Ops control: report a delay as the rider or as the broker (channel ops_dashboard). */
 export const simulateDelay = mutation({
   args: {
+    opsKey: vOpsKey,
     rideId: v.optional(v.id("rides")),
     as: vReportedBy,
     delayMinutes: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { opsKey, ...args }) => {
+    assertOps(opsKey);
     const state = await getDemoState(ctx);
     let rideId = args.rideId ?? state.activeRideId;
     if (!rideId) {
@@ -237,8 +243,9 @@ export const simulateDelay = mutation({
 });
 
 export const setDelayMinutes = mutation({
-  args: { delayMinutes: v.number() },
-  handler: async (ctx, { delayMinutes }) => {
+  args: { opsKey: vOpsKey, delayMinutes: v.number() },
+  handler: async (ctx, { opsKey, delayMinutes }) => {
+    assertOps(opsKey);
     if (!Number.isFinite(delayMinutes) || delayMinutes < 0 || delayMinutes > 240) throw new Error("delayMinutes must be 0-240");
     const state = await getDemoState(ctx);
     await ctx.db.patch(state._id, { delayMinutes });
@@ -246,8 +253,9 @@ export const setDelayMinutes = mutation({
 });
 
 export const setActiveRide = mutation({
-  args: { rideId: v.optional(v.id("rides")) },
-  handler: async (ctx, { rideId }) => {
+  args: { opsKey: vOpsKey, rideId: v.optional(v.id("rides")) },
+  handler: async (ctx, { opsKey, rideId }) => {
+    assertOps(opsKey);
     const state = await getDemoState(ctx);
     await ctx.db.patch(state._id, { activeRideId: rideId });
   },
@@ -255,8 +263,9 @@ export const setActiveRide = mutation({
 
 /** Changes the human broker's number for every broker; must be on the allowlist. */
 export const setBrokerLine = mutation({
-  args: { phone: v.string() },
-  handler: async (ctx, { phone }) => {
+  args: { opsKey: vOpsKey, phone: v.string() },
+  handler: async (ctx, { opsKey, phone }) => {
+    assertOps(opsKey);
     const check = checkOutbound(phone.trim());
     if (!check.ok) throw new Error(check.reason);
     for (const b of await ctx.db.query("brokers").collect()) await ctx.db.patch(b._id, { phone: phone.trim() });
@@ -268,8 +277,9 @@ export const setBrokerLine = mutation({
 
 /** Ops backup (docs/07 section 5): open a member's trips site with a fresh link. */
 export const openTripsLink = mutation({
-  args: { memberId: v.id("members") },
-  handler: async (ctx, { memberId }) => {
+  args: { opsKey: vOpsKey, memberId: v.id("members") },
+  handler: async (ctx, { opsKey, memberId }) => {
+    assertOps(opsKey);
     if (!(await ctx.db.get(memberId))) throw new Error("member not found");
     const raw = newRawToken();
     const now = Date.now();
