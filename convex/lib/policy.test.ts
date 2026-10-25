@@ -6,6 +6,7 @@ import {
   daysUntilExpiry,
   evaluateDelay,
   isDuplicateReport,
+  normalizeConfirmation,
   paperworkStatus,
 } from "./policy";
 import { checkOutbound, parseAllowlist } from "./safety";
@@ -118,6 +119,13 @@ describe("duplicate reports", () => {
     expect(isDuplicateReport(prev, { channel: "rider_web", delayMinutes: 10 }, NOW + 2 * MINUTE)).toBe(false);
     expect(isDuplicateReport(prev, { channel: "rider_web", delayMinutes: 25 }, NOW)).toBe(false);
     expect(isDuplicateReport([{ channel: "broker_call", createdAt: NOW - MINUTE }], { channel: "broker_call", delayMinutes: 20 }, NOW)).toBe(false);
+  });
+});
+
+describe("confirmation numbers", () => {
+  test("spoken variants of the same number normalize to one form", () => {
+    for (const heard of ["TR-4821", "TR482-1", "tr 4821", "T R 4 8 2 1", " TR4821 "]) expect(normalizeConfirmation(heard)).toBe("TR4821");
+    expect(normalizeConfirmation(" - ")).toBe("");
   });
 });
 

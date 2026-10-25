@@ -7,6 +7,7 @@ import { logEvent } from "./events";
 import { transitionRide } from "./rides";
 import { reportDelay } from "./delays";
 import { canTransition } from "./lib/stateMachine";
+import { normalizeConfirmation } from "./lib/policy";
 import type { Doc, Id } from "./_generated/dataModel";
 
 export type BrainCall = Pick<Doc<"calls">, "role" | "status" | "policyAction" | "delayReportId" | "outcome" | "summary" | "updateText" | "answered" | "createdAt"> & {
@@ -159,7 +160,7 @@ export const applyExtractedBooking = internalMutation({
     const ride = await ctx.db.get(args.rideId);
     if (!ride || ride.status !== "calling_broker") return { ok: false };
     await transitionRide(ctx, args.rideId, "booked", "booking taken from the call transcript", {
-      brokerConfirmationNumber: args.confirmationNumber.trim().toUpperCase(),
+      brokerConfirmationNumber: normalizeConfirmation(args.confirmationNumber),
       pickupWindowStart: args.pickupWindowStart,
       pickupWindowEnd: args.pickupWindowEnd,
     });
@@ -174,7 +175,7 @@ export const applyExtractedReplacement = internalMutation({
     if (!ride || (ride.status !== "late" && ride.status !== "recovery_calling")) return { ok: false };
     if (ride.status === "late") await transitionRide(ctx, args.rideId, "recovery_calling", "replacement found in transcript");
     await transitionRide(ctx, args.rideId, "replacement_booked", "replacement taken from the call transcript", {
-      replacementConfirmationNumber: args.confirmationNumber.trim().toUpperCase(),
+      replacementConfirmationNumber: normalizeConfirmation(args.confirmationNumber),
       replacementWindowStart: args.pickupWindowStart,
       replacementWindowEnd: args.pickupWindowEnd,
     });

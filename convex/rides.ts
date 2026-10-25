@@ -5,6 +5,7 @@ import { vRideStatus } from "./schema";
 import { logEvent } from "./events";
 import { canTransition, type RideStatus } from "./lib/stateMachine";
 import { statusTextBoth } from "./lib/wording";
+import { normalizeConfirmation } from "./lib/policy";
 
 type RidePatch = Partial<Omit<Doc<"rides">, "_id" | "_creationTime" | "status">>;
 
@@ -62,7 +63,8 @@ export async function activeRideForMember(
 }
 
 export async function rideByConfirmation(ctx: QueryCtx, confirmationNumber: string): Promise<Doc<"rides"> | null> {
-  const num = confirmationNumber.trim().toUpperCase();
+  const num = normalizeConfirmation(confirmationNumber);
+  if (!num) return null;
   return (
     (await ctx.db
       .query("rides")
@@ -99,5 +101,22 @@ export const get = query({
     const member = await ctx.db.get(ride.memberId);
     const broker = ride.brokerId ? await ctx.db.get(ride.brokerId) : null;
     return { ride, member, broker };
+  },
+});
+
+/** One-time fix for rides stored before confirmation numbers were normalized. */
+export const normalizeConfirmations = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let changed = 0;
+    for (const r of await ctx.db.query("rides").collect()) {
+      const a = r.brokerConfirmationNumber && normalizeConfirmation(r.brokerConfirmationNumber);
+      const b = r.replacementConfirmationNumber && normalizeConfirmation(r.replacementConfirmationNumber);
+      if (a !== r.brokerConfirmationNumber || b !== r.replacementConfirmationNumber) {
+        await ctx.db.patch(r._id, { brokerConfirmationNumber: a || undefined, replacementConfirmationNumber: b || undefined });
+        changed++;
+      }
+    }
+    return { changed };
   },
 });

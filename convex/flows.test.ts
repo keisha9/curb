@@ -120,7 +120,7 @@ describe("booking", () => {
     await settle();
     ride = await rideFor(t, MARIA);
     expect(ride.status).toBe("booked");
-    expect(ride.brokerConfirmationNumber).toBe("TR-4821");
+    expect(ride.brokerConfirmationNumber).toBe("TR4821");
 
     // The rider hears the confirmation by phone, in Spanish, from recorded fields.
     const callback = await t.run(async (ctx) =>
@@ -132,12 +132,12 @@ describe("booking", () => {
       ).find((c) => c.role === "rider_callback"),
     );
     expect(callback?.language).toBe("es");
-    expect(callback?.updateText).toMatch(/^Su transporte está reservado\. Recogida .*7:30.*Confirmación TR-4821\.$/);
+    expect(callback?.updateText).toMatch(/^Su transporte está reservado\. Recogida .*7:30.*Confirmación TR4821\.$/);
 
     const sms = await t.run(async (ctx) => await ctx.db.query("messages").collect());
     expect(sms).toHaveLength(1);
     expect(sms[0]!.status).toBe("stubbed");
-    expect(sms[0]!.body).toMatch(/^Su transporte a Demo Dialysis Center esta reservado\. Recogida .*7:30.*Confirmacion TR-4821\. Vea sus viajes: https:\/\/demo\.test\/trips\?t=[0-9a-f]{48}$/);
+    expect(sms[0]!.body).toMatch(/^Su transporte a Demo Dialysis Center esta reservado\. Recogida .*7:30.*Confirmacion TR4821\. Vea sus viajes: https:\/\/demo\.test\/trips\?t=[0-9a-f]{48}$/);
 
     // The decision log reads as a story.
     const log = await t.query(api.events.byRide, { rideId: ride._id });
@@ -235,7 +235,7 @@ describe("delay reported by the rider", () => {
     await settle();
     ride = await rideFor(t, MARIA);
     expect(ride.status).toBe("replacement_booked");
-    expect(ride.replacementConfirmationNumber).toBe("TR-4822");
+    expect(ride.replacementConfirmationNumber).toBe("TR4822");
     // One callback for the booking, one for the replacement; never the same update twice.
     expect((await callsOf(t, rideId)).filter((c) => c.role === "rider_callback")).toHaveLength(2);
     expect(await texts(t, rideId)).toEqual(["booked:stubbed", "delay_received:stubbed", "replacement:stubbed"]);
@@ -243,7 +243,7 @@ describe("delay reported by the rider", () => {
     // The website shows the replacement live, with rider-safe wording only.
     trips = (await t.query(api.portal.trips, { token }))!;
     expect(trips.current[0]!.statusText.es).toContain("Va en camino otro transporte");
-    expect(trips.current[0]!.replacement?.confirmationNumber).toBe("TR-4822");
+    expect(trips.current[0]!.replacement?.confirmationNumber).toBe("TR4822");
     const detail = (await t.query(api.portal.tripDetail, { token, rideId }))!;
     const timelineText = JSON.stringify(detail.timeline);
     expect(timelineText).not.toMatch(/evaluateDelay|policy|Voice tool|Brain/);
@@ -363,6 +363,21 @@ describe("delay reported by the broker", () => {
     expect(await texts(t, rideId)).toContain("needs_human:stubbed");
   });
 
+  test("a confirmation number misheard with a dash still matches when the broker calls in", async () => {
+    const { t, settle } = setup();
+    await t.mutation(api.demo.seed, {});
+    await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
+    await settle();
+    const rideId = (await rideFor(t, MARIA))._id;
+    // Seen on a real call: the broker said "TR-4821" and speech recognition heard "TR482-1".
+    await t.action(internal.sim.brokerConfirmsBooking, { rideId, confirmationNumber: "TR482-1", ...WINDOW });
+    await settle();
+    expect((await rideFor(t, MARIA)).brokerConfirmationNumber).toBe("TR4821");
+    const broker = await t.mutation(internal.voiceTools.routeInbound, { externalCallId: "v9", callerNumber: BROKER });
+    const hit = await t.mutation(internal.voiceTools.lookupRide, { callId: broker.callId, confirmationNumber: "TR 4821" });
+    expect(hit.found).toBe(true);
+  });
+
   test("broker tools cannot be used from a rider call, and lookups miss on wrong numbers", async () => {
     const { t, settle } = setup();
     await bookMaria(t, settle);
@@ -432,9 +447,9 @@ describe("English end to end (James)", () => {
           .collect()
       ).map((m) => `${m.language} ${m.body}`),
     );
-    expect(bodies[0]).toMatch(/^en Your ride to Demo Dialysis Center is booked\. Pickup .*7:30 AM - 7:45 AM\. Confirmation OC-1234\. See your trips: /);
+    expect(bodies[0]).toMatch(/^en Your ride to Demo Dialysis Center is booked\. Pickup .*7:30 AM - 7:45 AM\. Confirmation OC1234\. See your trips: /);
     expect(bodies[1]).toBe("en We got your report that your driver is late. We are contacting the ride company now.");
-    expect(bodies[2]).toMatch(/^en Your driver was late\. A replacement ride is coming\. New pickup .*8:10 AM - 8:20 AM\. Confirmation OC-1235\./);
+    expect(bodies[2]).toMatch(/^en Your driver was late\. A replacement ride is coming\. New pickup .*8:10 AM - 8:20 AM\. Confirmation OC1235\./);
     const callback = await t.run(async (ctx) =>
       (
         await ctx.db

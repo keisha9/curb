@@ -8,6 +8,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { extractJson, llmConfigured } from "./lib/llm";
 import { parseLocalIso } from "./lib/time";
+import { normalizeConfirmation } from "./lib/policy";
 import { formatDateTime } from "./lib/wording";
 import { EXTRACTOR_SCHEMA, EXTRACTOR_SYSTEM_PROMPT } from "./prompts/extractor";
 
@@ -36,7 +37,7 @@ function normalize(raw: unknown): Outcome {
   const result = RESULTS.includes(o.result as Outcome["result"]) ? (o.result as Outcome["result"]) : "unclear";
   return {
     result,
-    confirmationNumber: s("confirmationNumber")?.toUpperCase() ?? null,
+    confirmationNumber: s("confirmationNumber") ? normalizeConfirmation(s("confirmationNumber")!) || null : null,
     pickupWindowStart: t("pickupWindowStart"),
     pickupWindowEnd: t("pickupWindowEnd"),
     delayMinutes: typeof o.delayMinutes === "number" && Number.isFinite(o.delayMinutes) ? o.delayMinutes : null,

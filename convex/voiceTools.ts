@@ -11,7 +11,7 @@ import { logEvent } from "./events";
 import { createCall } from "./calls";
 import { activeRideForMember, rideByConfirmation, transitionRide } from "./rides";
 import { reportDelay, type DelayReportResult } from "./delays";
-import { paperworkStatus, urgentRideObligation, daysUntilExpiry } from "./lib/policy";
+import { paperworkStatus, urgentRideObligation, daysUntilExpiry, normalizeConfirmation } from "./lib/policy";
 import { parseLocalIso } from "./lib/time";
 import { canTransition } from "./lib/stateMachine";
 import { formatDateTime, formatNowForAgent, formatWindow, statusText } from "./lib/wording";
@@ -344,7 +344,7 @@ export const confirmBooking = internalMutation({
     const call = await requireCall(ctx, args.callId, ["broker_booking"]);
     if (!call.rideId) throw new Error("booking call has no ride");
     const ride = (await ctx.db.get(call.rideId))!;
-    const num = args.confirmationNumber.trim().toUpperCase();
+    const num = normalizeConfirmation(args.confirmationNumber);
     const window = parseWindow(args.pickupWindowStart, args.pickupWindowEnd);
     let say: string;
     if (!num || !window) {
@@ -434,7 +434,7 @@ export const confirmReplacement = internalMutation({
       await logTool(ctx, undefined, "confirm_replacement", args, say);
       return { say };
     }
-    const num = args.confirmationNumber.trim().toUpperCase();
+    const num = normalizeConfirmation(args.confirmationNumber);
     const window = parseWindow(args.pickupWindowStart, args.pickupWindowEnd);
     let say: string;
     if (!num || !window) {

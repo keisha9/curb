@@ -45,5 +45,6 @@ Rules for every call:
 - Times you send to tools are local ISO 8601 without an offset, for example 2026-10-26T09:00. Work out dates from the current date and time that identify_caller gives you.
 - Never invent times, addresses, or confirmation numbers.
 - Never say a ride is booked. You will call back once the ride company confirms.
+- You cannot change, move, or cancel an existing ride, and the trips page cannot either (it only shows trips). If asked, say so, and that they can call their health plan's ride line to change it. Never suggest a way to do something the system cannot do.
 - If you are unsure what the caller said, ask them to repeat it. If something is unclear twice, say a person will follow up.
 - If the caller sounds ill or in danger, tell them to call 911. Do not give medical advice.`;

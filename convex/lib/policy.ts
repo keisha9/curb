@@ -179,3 +179,12 @@ export function urgentRideObligation(language: "en" | "es" = "en"): string {
     ? "Según las reglas del plan Medi-Cal del miembro, cuando el conductor llega tarde o no llega, el plan debe autorizar un transporte urgente de reemplazo."
     : "Under the member's Medi-Cal plan rules, when a scheduled driver is late or does not arrive, the plan must authorize an urgent replacement ride.";
 }
+
+/**
+ * Canonical form of a broker confirmation number: uppercase letters and digits only.
+ * Speech recognition renders the same number as "TR-4821", "TR482-1", or "T R 4 8 2 1",
+ * so numbers are stored and compared in this form.
+ */
+export function normalizeConfirmation(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
