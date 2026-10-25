@@ -1,0 +1,95 @@
+# 10 - Open Decisions
+
+Keep this file current. Claude Code should add to it instead of deciding silently.
+
+## 1. Confirmed by you
+
+| Decision | Answer |
+|---|---|
+| Voice and telephony | Vapi with Cartesia voice |
+| Builder | Solo |
+| Doc format | Markdown files in the repo for Claude Code |
+| Mock broker | A judge or teammate plays the broker live |
+| Convex | Not sure it is the right fit, but it must be used substantially |
+| Languages | English and Spanish |
+| Delay reporting | Both the rider and the broker can report a delay |
+| Web surfaces | Ops dashboard for controls, plus a website where riders see past, current, and upcoming trips |
+| Time allocations in docs | Removed |
+| Product name | Placeholder `PROJECT_NAME`, easy to change (see README, Naming) |
+| Section 2 defaults | All accepted as-is (2026-10-24) |
+| Repo | `project-name`, public on GitHub |
+| Seed phone numbers | Placeholders via Convex env vars (`DEMO_MARIA_PHONE`, `DEMO_JAMES_PHONE`, `DEMO_ROSA_PHONE`, `DEMO_BROKER_PHONE`); fictional 555-01xx numbers until set |
+
+## 2. Defaults I set because the docs needed them (change any you disagree with)
+
+| Default | Why | Alternative |
+|---|---|---|
+| Convex is the only backend (no separate server) | You want substantial Convex use; HTTP actions, scheduler, and live queries cover everything | Small separate webhook server if Vapi latency demands it |
+| One React + Vite + TypeScript + Tailwind app with `/ops` and `/trips` | Shared components and one deploy | Two apps; Next.js |
+| Haiku 5.5 for voice turns, Sonnet 5.5 for the brain | Carried over from our earlier cost discussion | Haiku everywhere to save credit |
+| One Vapi server URL (`/vapi/server`) switching on message type | Simplest configuration | Separate routes |
+| Seed members: Maria (es, wheelchair), James (en), Rosa (es, expired) plus past trips | Shows booking, English, the ineligible path, and a populated website | Fewer members |
+| Brain triggered by webhooks and the scheduler, not run as a long loop | Keeps actions short and robust | Convex workflow component |
+| SMS in the rider's language using templates the brain may adapt | Predictable text | Fully model-written SMS |
+| Broker reports a delay by calling the system's number from a registered broker line, or during a call the agent places | Works with a human-played broker on one phone | Only during agent-placed calls; or a broker web form |
+| Broker callers are untrusted: minimal info, can only record delays and replacements | Caller ID can be spoofed | Require a PIN or reference code |
+| Delay threshold of 15 minutes past the pickup window start | Reused from the 15-minute figure in the DHCS summary, **which is about rider readiness, not driver lateness** | Verify the real trigger; make the threshold a config value |
+| A rider report with no minutes before the threshold only triggers a status check with the broker | Avoids invoking the obligation on an early complaint | Always request a replacement |
+| The agent requests the urgent replacement automatically when policy says the obligation applies | Matches the original demo idea | Ask the rider first |
+| A delay after a replacement is booked escalates to a human | Prevents call loops | Allow another recovery attempt |
+| Rider website login is a texted magic link (random token, hashed, expires after `PORTAL_TOKEN_TTL_DAYS`, default 14) | No passwords, easy for elderly riders, no extra service | Phone code, Auth0 for AI Agents, demo member picker |
+| Rider website is view plus "report delay" only; no booking or cancelling | Voice is the booking channel | Add cancel or request-callback buttons |
+| Website shows plain-language status and timeline only, never transcripts or the decision log | Privacy and clarity | Show call summaries or transcripts |
+| Trip grouping: Current includes any delayed or recovering trip and any booked trip starting within 2 hours | Makes the trip visibly move during the demo | Different rule |
+| Ops dashboard has no login (demo only) | Speed | Basic auth or Auth0 |
+| Product name lives in `shared/config.ts` as `APP_NAME` and `APP_NAME_SPOKEN`, prompts use `{{appName}}`, docs use `PROJECT_NAME` | One-pass rename | |
+
+## 3. Questions still open
+
+1. What are the exact phone numbers for the demo rider and the broker, and who plays the broker on demo day?
+2. Which one P1 feature do you want in Phase 5: will-call return, expiration cron, language toggle on the website, or cost display? (Expiration cron helps the Convex story most.)
+3. How should riders log in to the website: texted link (default), phone code, Auth0, or a demo picker? Do you want Auth0 for AI Agents (extra build) to model rider authorization?
+4. How should the broker report a delay: calling in from a registered number (default), only during calls the agent places, or both?
+5. Should the agent ask the rider before requesting an urgent replacement, or do it automatically as now?
+6. Should the website allow anything beyond viewing trips and reporting a delay (booking, cancelling, requesting a callback)?
+7. Which delay option (A broker call-in, B rider, C ops button) is the primary live demo trigger?
+8. Do you have a real conversation or source for the Anthropic named-community requirement? If not, who could you talk to before submission?
+9. Should there be a backup automated broker (a second Vapi assistant) in case no human broker is available on demo day? You chose human-only, so none is planned.
+10. Which screens will judges see: the ops dashboard, the rider website, or both?
+
+## 4. Verify before relying (do these in Phase 0 and Phase 2)
+
+- [ ] Vapi: Cartesia is available as a voice provider; the Spanish voice sounds natural
+- [ ] Vapi: Haiku 5.5 appears in the model list (else custom LLM or another model)
+- [ ] Vapi: multilingual or language-detect transcriber setting for Spanish and English
+- [ ] Vapi: payload shapes for `assistant-request`, `tool-calls`, `end-of-call-report`, and the outbound call API
+- [ ] Vapi: `assistant-request` can return a different assistant per caller on one inbound number (riders vs brokers)
+- [ ] Vapi: free credits and per-minute cost; outbound call limits for trial accounts
+- [ ] Twilio: can send SMS with links to your test numbers from a trial account (verified numbers only)
+- [ ] Anthropic: current per-token prices and prompt caching behavior; spend limit set
+- [ ] Convex: HTTP action and scheduler limits; whether any component (retrier, rate limiter, workflow) is worth the time
+- [ ] DHCS facts in `01-PRD.md` (PCS 12-month validity, NMT renewal, 15-minute rule, urgent ride obligation, 3-hour discharge rule)
+- [ ] The real trigger for treating a driver as late (the demo uses 15 minutes past the window start as an assumption)
+- [ ] Broker names for each plan (e.g., "Call the Car" for L.A. Care, ModivCare for CalOptima) before saying them in the pitch
+- [ ] Prize page changes for Cartesia, Convex, Anthropic, and Microsoft before submitting
+
+## 5. Decision log (append as you go)
+
+| Date and time | Decision | Reason |
+|---|---|---|
+| 2026-10-24 | Pinned Vite 6, Vitest 3, `@vitejs/plugin-react` 4 | Local Node is 20.12; Vite 8 needs 20.19+, Vitest 5 needs 22.12+. Upgrading Node to 22 LTS would allow the newer versions |
+| 2026-10-24 | Phase 1 runs on an anonymous local Convex deployment (`CONVEX_AGENT_MODE=anonymous`) | No Convex login needed to build and test; link to a cloud project with `npx convex login` before Phase 2 (Vapi needs a public URL) |
+| 2026-10-24 | Brain has two modes: Claude (Sonnet 5.5) when `ANTHROPIC_API_KEY` is set, or a deterministic scripted brain that follows the trigger table in `05` section 7. `BRAIN_MODE=scripted` forces it | Tests and text runs need no API key or credit; the scripted brain is also the fallback when a Claude run fails before taking any action (`02` section 9) |
+| 2026-10-24 | The brain picks an SMS template; it cannot write SMS text. Text is rendered only from recorded fields, and a template missing a fact refuses to send | Stricter form of "brain may adapt templates, never invent facts" |
+| 2026-10-24 | Sonnet brain calls use the server-side refusal fallback (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) and effort `medium` | A safety decline is retried on Anthropic's recommended fallback model instead of failing the turn |
+| 2026-10-24 | `needs_human` is reachable from any non-terminal state, and `needs_human -> completed/cancelled` is allowed | The brain or a broker refusal can need a person at any point; ops needs a way to close the ride |
+| 2026-10-24 | When a broker reports a past-threshold delay on a live call, the ride moves `late -> recovery_calling` during that call | The agent asks for the replacement on the same call (cue card option A) |
+| 2026-10-24 | Ride detail fields (appointment, destination, pickup) are optional in the schema | A `collecting` ride exists before the rider has given them |
+| 2026-10-24 | Schema additions: call role `unknown_inbound`; `calls.policyAction`, `calls.delayReportId`, `calls.error`; `delayReports.ignoredReason` (`duplicate` / `attached_to_open_recovery`); `messages.template`; `rides.by_replacement_confirmation` index; `agentEvents.by_created` index | Needed for routing, the decision log, idempotent SMS, and broker lookups by either confirmation number |
+| 2026-10-24 | Rider website timeline shows a plain label per call ("We called the ride company"), not Vapi call summaries | Summaries are model-written and could contain internal detail |
+| 2026-10-24 | Times without an offset from voice tools are read as America/Los_Angeles (`TIME_ZONE` in `shared/config.ts`) | Assistants speak in the rider's local time |
+| 2026-10-24 | Seed brokers: "Call the Car (mock)" for L.A. Care, "Orange County Rides (mock)" for CalOptima | Avoid naming a real broker before verifying it (section 4) |
+
+## 6. New questions from the build
+
+1. A **broker** report with neither minutes nor an ETA falls to rule 6 (`notify_rider_only`) as `03` is written; rules 4 and 5 apply only to rider reports. Is that intended, or should a broker saying "the driver is late" with no number also be checked against the clock?

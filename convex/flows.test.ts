@@ -1,0 +1,378 @@
+/// <reference types="vite/client" />
+// Phase 1 scenarios from docs/06 (Test checklist), run entirely in text with stubbed
+// calls and SMS and the scripted brain (no ANTHROPIC_API_KEY in tests).
+
+import { convexTest } from "convex-test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.ts");
+
+const MARIA = "+13105550101";
+const JAMES = "+13105550102";
+const ROSA = "+13105550103";
+const BROKER = "+13105550199";
+const STRANGER = "+13105550177";
+
+// Friday Oct 23 2026, 1 PM in Los Angeles.
+const START = new Date("2026-10-23T20:00:00Z");
+const APPT = "2026-10-24T09:00";
+const WINDOW = { pickupWindowStart: "2026-10-24T07:30", pickupWindowEnd: "2026-10-24T07:45" };
+// 7:35 AM on the day of the ride: inside the pickup window.
+const DURING_WINDOW = new Date("2026-10-24T14:35:00Z");
+
+function setup() {
+  const t = convexTest(schema, modules);
+  const settle = () => t.finishAllScheduledFunctions(vi.runAllTimers);
+  return { t, settle };
+}
+
+type T = ReturnType<typeof setup>["t"];
+
+async function rideFor(t: T, phone: string) {
+  return await t.run(async (ctx) => {
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .first();
+    const rides = await ctx.db
+      .query("rides")
+      .withIndex("by_member", (q) => q.eq("memberId", member!._id))
+      .collect();
+    return rides.sort((a, b) => b.createdAt - a.createdAt)[0]!;
+  });
+}
+
+async function texts(t: T, rideId: Id<"rides">) {
+  return await t.run(async (ctx) =>
+    (
+      await ctx.db
+        .query("messages")
+        .withIndex("by_ride", (q) => q.eq("rideId", rideId))
+        .collect()
+    ).map((m) => `${m.template}:${m.status}`),
+  );
+}
+
+async function callsOf(t: T, rideId: Id<"rides">) {
+  return await t.run(async (ctx) =>
+    (
+      await ctx.db
+        .query("calls")
+        .withIndex("by_ride", (q) => q.eq("rideId", rideId))
+        .collect()
+    ).map((c) => ({ role: c.role, status: c.status, policyAction: c.policyAction })),
+  );
+}
+
+/** Seed, book Maria's ride, and have the broker confirm it. */
+async function bookMaria(t: T, settle: () => Promise<void>) {
+  await t.mutation(api.demo.seed, {});
+  await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
+  await settle();
+  const ride = await rideFor(t, MARIA);
+  await t.action(internal.sim.brokerConfirmsBooking, { rideId: ride._id, confirmationNumber: "TR-4821", ...WINDOW });
+  await settle();
+  return ride._id;
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(START);
+  process.env.ALLOWED_OUTBOUND_NUMBERS = [MARIA, JAMES, ROSA, BROKER].join(",");
+  process.env.PORTAL_BASE_URL = "https://demo.test";
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.VAPI_API_KEY;
+  delete process.env.TWILIO_ACCOUNT_SID;
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("booking", () => {
+  test("inbound Spanish call -> broker call -> booked -> Spanish SMS with link", async () => {
+    const { t, settle } = setup();
+    await t.mutation(api.demo.seed, {});
+    const call = (await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT })) as {
+      eligibility: { valid: boolean };
+    };
+    expect(call.eligibility.valid).toBe(true);
+    await settle();
+
+    let ride = await rideFor(t, MARIA);
+    expect(ride.status).toBe("calling_broker");
+    expect(ride.riderConfirmedAt).toBeDefined();
+    expect(ride.language).toBe("es");
+    expect(await callsOf(t, ride._id)).toEqual([expect.objectContaining({ role: "rider_inbound" }), expect.objectContaining({ role: "broker_booking", status: "ringing" })]);
+
+    await t.action(internal.sim.brokerConfirmsBooking, { rideId: ride._id, confirmationNumber: "tr-4821", ...WINDOW });
+    await settle();
+    ride = await rideFor(t, MARIA);
+    expect(ride.status).toBe("booked");
+    expect(ride.brokerConfirmationNumber).toBe("TR-4821");
+
+    const sms = await t.run(async (ctx) => await ctx.db.query("messages").collect());
+    expect(sms).toHaveLength(1);
+    expect(sms[0]!.status).toBe("stubbed");
+    expect(sms[0]!.body).toMatch(/^Su transporte a Demo Dialysis Center esta reservado\. Recogida .*7:30.*Confirmacion TR-4821\. Vea sus viajes: https:\/\/demo\.test\/trips\?t=[0-9a-f]{48}$/);
+
+    // The decision log reads as a story.
+    const log = await t.query(api.events.byRide, { rideId: ride._id });
+    const kinds = log.map((e) => e.kind);
+    expect(kinds).toContain("policy_check");
+    expect(kinds).toContain("decision");
+    expect(kinds).toContain("sms");
+  });
+
+  test("expired paperwork (Rosa): declined gently, no broker call, ineligible SMS", async () => {
+    const { t, settle } = setup();
+    await t.mutation(api.demo.seed, {});
+    const res = (await t.action(internal.sim.riderBooks, { phone: ROSA, appointmentAt: APPT })) as {
+      eligibility: { valid: boolean; say: string };
+      submit: unknown;
+    };
+    expect(res.eligibility.valid).toBe(false);
+    expect(res.submit).toBeNull();
+    await settle();
+    const ride = await rideFor(t, ROSA);
+    expect(ride.status).toBe("ineligible");
+    expect((await callsOf(t, ride._id)).map((c) => c.role)).toEqual(["rider_inbound"]);
+    expect(await texts(t, ride._id)).toEqual(["ineligible:stubbed"]);
+  });
+
+  test("unknown caller is declined and nothing is created", async () => {
+    const { t } = setup();
+    await t.mutation(api.demo.seed, {});
+    const route = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: "v1", callerNumber: STRANGER });
+    expect(route.kind).toBe("unknown");
+    const rides = await t.run(async (ctx) => await ctx.db.query("rides").collect());
+    expect(rides.filter((r) => r.status !== "completed" && r.status !== "cancelled")).toHaveLength(0);
+  });
+
+  test("confirmation gate: no rider yes, no request and no booking call", async () => {
+    const { t, settle } = setup();
+    await t.mutation(api.demo.seed, {});
+    const res = (await t.action(internal.sim.riderBooks, { phone: JAMES, appointmentAt: APPT, confirm: false })) as {
+      submit: { ok: boolean };
+    };
+    expect(res.submit.ok).toBe(false);
+    await settle();
+    const ride = await rideFor(t, JAMES);
+    expect(ride.status).toBe("collecting");
+    // Even if something asks the brain layer directly, the gate refuses.
+    const gate = await t.mutation(internal.brainData.beginBookingCall, { rideId: ride._id });
+    expect(gate.ok).toBe(false);
+    expect((await callsOf(t, ride._id)).map((c) => c.role)).toEqual(["rider_inbound"]);
+  });
+
+  test("allowlist: SMS and calls to unlisted numbers are blocked and logged", async () => {
+    const { t, settle } = setup();
+    process.env.ALLOWED_OUTBOUND_NUMBERS = MARIA; // broker line not listed
+    await t.mutation(api.demo.seed, {});
+    await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
+    await settle();
+    const ride = await rideFor(t, MARIA);
+    expect((await callsOf(t, ride._id)).map((c) => c.role)).toEqual(["rider_inbound"]);
+    expect(ride.status).toBe("needs_human");
+    const errors = (await t.query(api.events.byRide, { rideId: ride._id })).filter((e) => e.kind === "error");
+    expect(errors.some((e) => e.summary.includes("not in ALLOWED_OUTBOUND_NUMBERS"))).toBe(true);
+  });
+});
+
+describe("delay reported by the rider", () => {
+  test("website report past the threshold -> replacement -> callback and SMS; page updates", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    const member = await t.run(async (ctx) => (await ctx.db.get(rideId))!.memberId);
+    const token = await t.mutation(api.demo.openTripsLink, { memberId: member });
+
+    vi.setSystemTime(DURING_WINDOW);
+    let trips = (await t.query(api.portal.trips, { token }))!;
+    expect(trips.current.map((x) => x.id)).toEqual([rideId]);
+    expect(trips.past).toHaveLength(3);
+    expect(trips.current[0]!.canReportDelay).toBe(true);
+
+    const res = await t.mutation(api.portal.reportDelay, { token, rideId, minutesLate: 25 });
+    expect(res.ok).toBe(true);
+    await settle();
+
+    let ride = await rideFor(t, MARIA);
+    expect(ride.status).toBe("recovery_calling");
+    expect(await callsOf(t, rideId)).toContainEqual({ role: "broker_delay", status: "ringing", policyAction: "request_urgent_replacement" });
+    expect(await texts(t, rideId)).toEqual(["booked:stubbed", "delay_received:stubbed"]);
+
+    await t.action(internal.sim.brokerAnswersDelayCall, {
+      rideId,
+      delayMinutes: 25,
+      replacementConfirmationNumber: "TR-4822",
+      replacementWindowStart: "2026-10-24T07:55",
+      replacementWindowEnd: "2026-10-24T08:05",
+    });
+    await settle();
+    ride = await rideFor(t, MARIA);
+    expect(ride.status).toBe("replacement_booked");
+    expect(ride.replacementConfirmationNumber).toBe("TR-4822");
+    expect((await callsOf(t, rideId)).map((c) => c.role)).toContain("rider_callback");
+    expect(await texts(t, rideId)).toEqual(["booked:stubbed", "delay_received:stubbed", "replacement:stubbed"]);
+
+    // The website shows the replacement live, with rider-safe wording only.
+    trips = (await t.query(api.portal.trips, { token }))!;
+    expect(trips.current[0]!.statusText.es).toContain("Va en camino otro transporte");
+    expect(trips.current[0]!.replacement?.confirmationNumber).toBe("TR-4822");
+    const detail = (await t.query(api.portal.tripDetail, { token, rideId }))!;
+    const timelineText = JSON.stringify(detail.timeline);
+    expect(timelineText).not.toMatch(/evaluateDelay|policy|Voice tool|Brain/);
+    expect(JSON.stringify(detail)).not.toMatch(/DEMO-9000|Demo Street/); // no IDs or addresses
+  });
+
+  test("phone report with no minutes within the threshold -> status check only", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(new Date("2026-10-24T14:35:00Z")); // 5 min into the window
+    const r = (await t.action(internal.sim.riderReportsDelay, { phone: MARIA })) as { action: string };
+    expect(r.action).toBe("verify_with_broker");
+    await settle();
+    const ride = await rideFor(t, MARIA);
+    expect(ride.status).toBe("booked");
+    expect(await callsOf(t, rideId)).toContainEqual({ role: "broker_delay", status: "ringing", policyAction: "verify_with_broker" });
+
+    // The broker says 10 minutes: within the threshold, rider gets the new ETA, no replacement.
+    await t.action(internal.sim.brokerAnswersDelayCall, { rideId, delayMinutes: 10 });
+    await settle();
+    expect((await rideFor(t, MARIA)).status).toBe("delayed");
+    expect(await texts(t, rideId)).toEqual(["booked:stubbed", "delay_received:stubbed", "delay_update:stubbed"]);
+  });
+
+  test("duplicate reports within 2 minutes are ignored and logged", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(DURING_WINDOW);
+    await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 10 });
+    const second = await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 10 });
+    expect(second.outcome).toBe("duplicate");
+    await settle();
+    const reports = await t.query(api.delays.byRide, { rideId });
+    expect(reports.map((r) => r.ignoredReason ?? "evaluated")).toEqual(["evaluated", "duplicate"]);
+  });
+});
+
+describe("delay reported by the broker", () => {
+  test("broker calls in past the threshold -> replacement on the same call -> rider called back", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(DURING_WINDOW);
+    const res = (await t.action(internal.sim.brokerCallsIn, {
+      brokerPhone: BROKER,
+      confirmationNumber: "TR-4821",
+      delayMinutes: 20,
+      replacementConfirmationNumber: "TR-4822",
+      replacementWindowStart: "2026-10-24T07:55",
+      replacementWindowEnd: "2026-10-24T08:05",
+    })) as { lookup: { found: boolean; say: string }; steps: { tool: string; say: string }[] };
+    expect(res.lookup.found).toBe(true);
+    expect(res.lookup.say).not.toMatch(/Demo Street|DEMO-9000/); // minimal info to an unverified caller
+    expect(res.steps[0]!.say).toContain("urgent replacement");
+    await settle();
+
+    const ride = await rideFor(t, MARIA);
+    expect(ride.status).toBe("replacement_booked");
+    const roles = (await callsOf(t, rideId)).map((c) => c.role);
+    expect(roles).toContain("broker_inbound");
+    expect(roles).toContain("rider_callback");
+    expect(roles).not.toContain("broker_delay");
+    expect(await texts(t, rideId)).toEqual(["booked:stubbed", "replacement:stubbed"]);
+    const reports = await t.query(api.delays.byRide, { rideId });
+    expect(reports[0]).toMatchObject({ reportedBy: "broker", channel: "broker_call" });
+  });
+
+  test("broker reports a delay below the threshold -> rider told the ETA, no replacement", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(DURING_WINDOW);
+    await t.action(internal.sim.brokerCallsIn, { brokerPhone: BROKER, confirmationNumber: "TR-4821", delayMinutes: 10 });
+    await settle();
+    expect((await rideFor(t, MARIA)).status).toBe("delayed");
+    expect(await texts(t, rideId)).toEqual(["booked:stubbed", "delay_update:stubbed"]);
+    expect((await callsOf(t, rideId)).map((c) => c.role)).not.toContain("broker_delay");
+  });
+
+  test("broker call-in past the threshold but no replacement given -> we call the broker back", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(DURING_WINDOW);
+    await t.action(internal.sim.brokerCallsIn, { brokerPhone: BROKER, confirmationNumber: "TR-4821", delayMinutes: 30 });
+    await settle();
+    expect((await rideFor(t, MARIA)).status).toBe("recovery_calling");
+    expect(await callsOf(t, rideId)).toContainEqual({ role: "broker_delay", status: "ringing", policyAction: "request_urgent_replacement" });
+  });
+
+  test("ops simulated broker report triggers the same recovery", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(DURING_WINDOW);
+    await t.mutation(api.demo.simulateDelay, { as: "broker", delayMinutes: 20 });
+    await settle();
+    expect((await rideFor(t, MARIA)).status).toBe("recovery_calling");
+    expect((await callsOf(t, rideId)).map((c) => c.role)).toContain("broker_delay");
+    expect(await texts(t, rideId)).toEqual(["booked:stubbed"]); // broker reported: no "we got your report" text
+  });
+
+  test("a delay after the replacement is booked escalates to a human", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(DURING_WINDOW);
+    await t.action(internal.sim.brokerCallsIn, {
+      brokerPhone: BROKER,
+      confirmationNumber: "TR-4821",
+      delayMinutes: 20,
+      replacementConfirmationNumber: "TR-4822",
+      replacementWindowStart: "2026-10-24T07:55",
+      replacementWindowEnd: "2026-10-24T08:05",
+    });
+    await settle();
+    vi.advanceTimersByTime(30 * 60_000);
+    await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 40 });
+    await settle();
+    const ride = await rideFor(t, MARIA);
+    expect(ride.status).toBe("needs_human");
+    expect(await texts(t, rideId)).toContain("needs_human:stubbed");
+  });
+
+  test("broker tools cannot be used from a rider call, and lookups miss on wrong numbers", async () => {
+    const { t, settle } = setup();
+    await bookMaria(t, settle);
+    const rider = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: "v2", callerNumber: MARIA });
+    await expect(t.mutation(internal.voiceTools.confirmReplacement, { callId: rider.callId, confirmationNumber: "X", ...WINDOW })).rejects.toThrow();
+    const broker = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: "v3", callerNumber: BROKER });
+    const miss = await t.mutation(internal.voiceTools.lookupRide, { callId: broker.callId, confirmationNumber: "TR-0000" });
+    expect(miss.found).toBe(false);
+  });
+});
+
+describe("rider website scoping", () => {
+  test("a token sees only its member's trips, and expired or junk tokens see nothing", async () => {
+    const { t, settle } = setup();
+    const mariaRide = await bookMaria(t, settle);
+    const jamesId = await t.run(async (ctx) =>
+      (await ctx.db
+        .query("members")
+        .withIndex("by_phone", (q) => q.eq("phone", JAMES))
+        .first())!._id,
+    );
+    const jamesToken = await t.mutation(api.demo.openTripsLink, { memberId: jamesId });
+
+    const trips = (await t.query(api.portal.trips, { token: jamesToken }))!;
+    expect(trips.past).toHaveLength(1);
+    expect([...trips.current, ...trips.upcoming].map((x) => x.id)).not.toContain(mariaRide);
+    expect(await t.query(api.portal.tripDetail, { token: jamesToken, rideId: mariaRide })).toBeNull();
+    const cross = await t.mutation(api.portal.reportDelay, { token: jamesToken, rideId: mariaRide, minutesLate: 30 });
+    expect(cross).toEqual({ ok: false, error: "not_found" });
+
+    expect(await t.query(api.portal.me, { token: "not-a-token" })).toBeNull();
+    vi.advanceTimersByTime(15 * 86_400_000); // past the 14-day default
+    expect(await t.query(api.portal.trips, { token: jamesToken })).toBeNull();
+  });
+});
