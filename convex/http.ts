@@ -91,7 +91,7 @@ async function identifyCaller(ctx: ActionCtx, b: Json): Promise<string> {
       caller_kind: "unknown",
       member_name: "",
       language: "en",
-      say: "Unknown caller. Say politely, in English and Spanish, that this line only serves registered members, and end the call.",
+      say: "Unknown caller. Say politely that this line only serves registered members, and end the call.",
     });
   }
 }
@@ -189,24 +189,26 @@ http.route({
 
 // ---- Call events: https://docs.cartesia.ai/line/infrastructure/observability#webhooks ----
 
-type Turn = { id?: string; role?: string; text?: string; start_time?: string; started_at?: string };
+// Verified against real payloads (2026-10-24): call_turn carries one turn in `body`;
+// call_completed carries the transcript array in `body`; turn ids are numbers; turns with
+// role "system" are metrics; tool-call turns have no text. Summary: `analysis.summary`.
+type Turn = { id?: number | string; role?: string; text?: string };
 
 function turnsOf(x: unknown): Turn[] {
-  return Array.isArray(x) ? (x.filter((t) => t && typeof t === "object") as Turn[]) : [];
+  const list = Array.isArray(x) ? x : x && typeof x === "object" ? [x] : [];
+  return list.filter((t) => t && typeof t === "object") as Turn[];
 }
 
 async function storeTurns(ctx: ActionCtx, call: Doc<"calls">, turns: Turn[]) {
   const other = call.role.startsWith("broker") ? "broker" : "rider";
   for (const t of turns) {
-    if (!t.text?.trim()) continue;
-    const ts = Date.parse(t.start_time ?? t.started_at ?? "");
+    if (!t.text?.trim() || (t.role !== "assistant" && t.role !== "user")) continue;
     await ctx.runMutation(internal.calls.appendTranscript, {
       callId: call._id,
       speaker: t.role === "assistant" ? "agent" : other,
       text: t.text,
       isFinal: true,
-      turnId: t.id,
-      ts: Number.isNaN(ts) ? undefined : ts,
+      turnId: t.id !== undefined ? String(t.id) : undefined,
     });
   }
 }
@@ -236,7 +238,7 @@ http.route({
         appCallId: str(vars, "app_call_id"),
         externalCallId,
       });
-      if (!call && externalCallId && type === "call_started" && str(telephony, "direction") === "inbound" && str(telephony, "from")) {
+      if (!call && externalCallId && str(telephony, "direction") === "inbound" && str(telephony, "from")) {
         const route = await ctx.runMutation(internal.voiceTools.routeInbound, { externalCallId, callerNumber: str(telephony, "from")! });
         call = await ctx.runQuery(internal.calls.getInternal, { callId: route.callId });
       }
@@ -250,11 +252,11 @@ http.route({
           await ctx.runMutation(internal.calls.setStatus, { callId: call._id, status: "in_progress" });
           break;
         case "call_turn":
-          await storeTurns(ctx, call, turnsOf([event.turn ?? (event.data as Json | undefined)?.turn].filter(Boolean)));
+          await storeTurns(ctx, call, turnsOf(event.body));
           break;
         case "call_completed":
         case "call_failed":
-          await storeTurns(ctx, call, turnsOf(callObj.transcript));
+          await storeTurns(ctx, call, turnsOf(event.body ?? callObj.transcript));
           await ctx.runMutation(internal.calls.end, {
             callId: call._id,
             summary: str(callObj, "summary"),
@@ -262,7 +264,7 @@ http.route({
           });
           break;
         case "post_call_analysis": {
-          const summary = str(callObj, "summary") ?? str(event, "summary");
+          const summary = str((event.analysis ?? {}) as Json, "summary") ?? str(callObj, "summary");
           if (summary) await ctx.runMutation(internal.calls.setSummary, { callId: call._id, summary });
           break;
         }

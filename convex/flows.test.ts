@@ -96,6 +96,14 @@ describe("booking", () => {
   test("inbound Spanish call -> broker call -> booked -> Spanish SMS with link", async () => {
     const { t, settle } = setup();
     await t.mutation(api.demo.seed, {});
+    // The demo runs English-only for now; the Spanish path stays supported and tested.
+    await t.run(async (ctx) => {
+      const maria = await ctx.db
+        .query("members")
+        .withIndex("by_phone", (q) => q.eq("phone", MARIA))
+        .first();
+      await ctx.db.patch(maria!._id, { preferredLanguage: "es" });
+    });
     const call = (await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT })) as {
       eligibility: { valid: boolean };
     };
@@ -557,5 +565,50 @@ describe("missed calls", () => {
     await settle();
     expect((await rideFor(t, MARIA)).status).toBe("recovery_calling");
     expect((await callsOf(t, rideId)).filter((c) => c.role === "broker_delay")).toHaveLength(2);
+  });
+});
+
+describe("Cartesia webhooks (payload shapes from a real call)", () => {
+  const SECRET = "test-secret";
+  const CALL = "ac_CAtest123";
+  const event = (type: string, extra: Record<string, unknown>) =>
+    JSON.stringify({ type, call_id: CALL, agent_id: "agent_x", webhook_id: "agent_webhook_x", webhook_request_id: `w_${Math.random()}`, ...extra });
+  const post = (t: T, path: string, body: string, headers: Record<string, string>) =>
+    t.fetch(path, { method: "POST", body, headers: { "Content-Type": "application/json", ...headers } });
+
+  test("secret is required on tools and events", async () => {
+    process.env.VOICE_WEBHOOK_SECRET = SECRET;
+    const { t } = setup();
+    expect((await post(t, "/voice/tools/identify_caller", "{}", {})).status).toBe(401);
+    expect((await post(t, "/voice/events", "{}", { "X-Webhook-Secret": "wrong" })).status).toBe(401);
+  });
+
+  test("inbound call: started -> identify -> numeric-id turns -> completed -> summary, one call row", async () => {
+    process.env.VOICE_WEBHOOK_SECRET = SECRET;
+    const { t } = setup();
+    await t.mutation(api.demo.seed, {});
+    const ev = (body: string) => post(t, "/voice/events", body, { "X-Webhook-Secret": SECRET });
+
+    await ev(event("call_started", { body: null, call: { id: CALL, telephony_params: { from: MARIA, to: "+16627802148", direction: "inbound" }, status: "started" } }));
+    // identify_caller with a conversation id that may differ from the call id: still one row.
+    const idRes = await post(t, "/voice/tools/identify_caller", JSON.stringify({ conversation_id: "conv_other", caller_id: MARIA }), { Authorization: `Bearer ${SECRET}` });
+    expect(await idRes.text()).toContain("Caller is the member Maria Gonzalez");
+
+    const turn1 = { id: 1, role: "assistant", text: "Hello, this is PROJECT_NAME.", start_timestamp: 0.2, end_timestamp: 2.1, was_interrupted: false };
+    const turn2 = { id: 2, role: "user", text: "Um, I'm Maria.", start_timestamp: 3, end_timestamp: 4, was_interrupted: false };
+    const metric = { role: "system", log_metric: { name: "llm_first_text_ms", value: 1193 } };
+    const toolTurn = { id: 3, role: "assistant", tool_calls: [{ name: "identify_caller", arguments: {}, result: "..." }] };
+    await ev(event("call_turn", { body: turn1 }));
+    await ev(event("call_turn", { body: turn2 }));
+    await ev(event("call_completed", { body: [turn1, turn2, metric, toolTurn] }));
+    await ev(event("post_call_analysis", { body: null, analysis: { summary: "Maria asked for a ride." } }));
+
+    const calls = await t.run(async (ctx) => await ctx.db.query("calls").collect());
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ role: "rider_inbound", status: "ended", answered: true, summary: "Maria asked for a ride." });
+    const lines = await t.run(async (ctx) => await ctx.db.query("transcriptLines").collect());
+    expect(lines.map((l) => `${l.speaker}: ${l.text}`)).toEqual(["agent: Hello, this is PROJECT_NAME.", "rider: Um, I'm Maria."]);
+    const errors = await t.run(async (ctx) => (await ctx.db.query("agentEvents").collect()).filter((e) => e.kind === "error"));
+    expect(errors).toEqual([]);
   });
 });

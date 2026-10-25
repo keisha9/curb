@@ -34,6 +34,7 @@ export const create = internalMutation({
   args: {
     role: vCallRole,
     direction: v.union(v.literal("inbound"), v.literal("outbound")),
+    fromNumber: v.optional(v.string()),
     externalCallId: v.string(),
     status: vCallStatus,
     rideId: v.optional(v.id("rides")),

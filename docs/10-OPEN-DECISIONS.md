@@ -107,6 +107,11 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | 2026-10-24 | `OUTBOUND_MODE=stub` keeps calls in the database even when Cartesia is set up | Lets the Claude brain be tested in text without ringing real phones |
 | 2026-10-24 | Demo members are upserted by their fake member ID, not phone | Changing a demo phone number updates the member instead of adding a second one |
 
+| 2026-10-24 | **English only for now**: inbound agent English (voice Skylar), all demo members English. The Spanish paths stay in code and tests (`voiceAgents.ts` notes how to re-enable) | Decided by you after the first test call ("too Spanish") |
+| 2026-10-24 | Tool webhooks pass only Cartesia system variables (`system__conversation_id`, `system__caller_id`) | First test call: Cartesia rejects a tool whose custom variable is unset (`app_call_id` on inbound calls), so `identify_caller` never reached us |
+| 2026-10-24 | Inbound calls are matched by provider id, else by a live inbound call from the same number in the last 10 minutes | The call-started event and `identify_caller` may carry different ids |
+| 2026-10-24 | Verified event payloads: `call_turn` has one turn in `body`, `call_completed` the transcript array in `body`, numeric turn ids, `system` metric turns, summary in `analysis.summary` | First test call; regression test replays these shapes |
+
 ## 6. New questions from the build
 
 None open.

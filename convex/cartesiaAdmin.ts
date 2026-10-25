@@ -2,7 +2,7 @@
 // Internal only. Responses never include the API key.
 
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
+import { internalAction, internalQuery } from "./_generated/server";
 import { cartesia, cartesiaConfigured } from "./lib/cartesia";
 
 /** GET a Cartesia API path and return status plus a truncated body. For discovery while wiring Phase 2. */
@@ -56,5 +56,14 @@ export const selfTest = internalAction({
       identify: { status: identify.status, body: await identify.text() },
       getRideStatus: { status: status.status, body: await status.text() },
     };
+  },
+});
+
+/** Recent raw provider webhook payloads (debugging event field names). */
+export const recentWebhooks = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    const rows = await ctx.db.query("webhookLog").order("desc").take(limit ?? 20);
+    return rows.map((r) => ({ type: r.type, at: new Date(r.createdAt).toISOString(), body: r.body.slice(0, 3000) }));
   },
 });

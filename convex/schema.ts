@@ -152,6 +152,8 @@ export default defineSchema({
     brokerId: v.optional(v.id("brokers")),
     role: vCallRole,
     direction: v.union(v.literal("inbound"), v.literal("outbound")),
+    // Inbound: the caller's number.
+    fromNumber: v.optional(v.string()),
     intent: v.optional(v.string()),
     externalCallId: v.string(),
     status: vCallStatus,
@@ -172,7 +174,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_externalCallId", ["externalCallId"])
-    .index("by_ride", ["rideId"]),
+    .index("by_ride", ["rideId"])
+    .index("by_from", ["fromNumber"]),
 
   transcriptLines: defineTable({
     callId: v.id("calls"),

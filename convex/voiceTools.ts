@@ -43,10 +43,19 @@ function firstName(name: string): string {
 export const routeInbound = internalMutation({
   args: { externalCallId: v.string(), callerNumber: v.string() },
   handler: async (ctx, { externalCallId, callerNumber }) => {
-    const existing = await ctx.db
-      .query("calls")
-      .withIndex("by_externalCallId", (q) => q.eq("externalCallId", externalCallId))
-      .first();
+    // The call-started event and identify_caller can both route the same call. Match by provider
+    // id, else by a live inbound call from the same number in the last few minutes.
+    const existing =
+      (await ctx.db
+        .query("calls")
+        .withIndex("by_externalCallId", (q) => q.eq("externalCallId", externalCallId))
+        .first()) ??
+      (await ctx.db
+        .query("calls")
+        .withIndex("by_from", (q) => q.eq("fromNumber", callerNumber))
+        .order("desc")
+        .first()
+        .then((c) => (c && c.direction === "inbound" && c.endedAt === undefined && Date.now() - c.createdAt < 10 * 60_000 ? c : null)));
 
     const member = await ctx.db
       .query("members")
@@ -65,6 +74,7 @@ export const routeInbound = internalMutation({
       (await createCall(ctx, {
         role,
         direction: "inbound",
+        fromNumber: callerNumber,
         externalCallId,
         status: "ringing",
         memberId: member?._id,

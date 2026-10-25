@@ -118,11 +118,14 @@ export const TOOL_SPECS: ToolSpec[] = [
   },
 ];
 
-/** Values the server needs on every tool call, filled by Cartesia, never by the model. */
+/**
+ * Values the server needs on every tool call, filled by Cartesia, never by the model.
+ * Only system variables: a custom variable that is unset on a call (e.g. app_call_id on
+ * inbound calls) makes Cartesia reject the tool call before it reaches us.
+ */
 const HIDDEN = {
   conversation_id: { type: "string", dynamic_variable: "system__conversation_id" },
   caller_id: { type: "string", dynamic_variable: "system__caller_id" },
-  app_call_id: { type: "string", dynamic_variable: "app_call_id" },
 };
 
 export function toolBody(spec: ToolSpec, siteUrl: string, secret: string) {
@@ -179,8 +182,9 @@ export function agentConfig(key: AgentKey, toolIds: Record<string, string>, even
         ...base,
         instructions: withName(INBOUND_PROMPT),
         initial_message: withName(INBOUND_INITIAL_MESSAGE),
-        language: { primary: "es", additional: [{ code: "en" }] },
-        audio: { output: { voice_id: VOICES.riderEs } },
+        // English only for now. To bring Spanish back: primary "es", additional [{ code: "en" }], voice riderEs.
+        language: { primary: "en", additional: [] }, // PATCH merges: clear any old additional languages
+        audio: { output: { voice_id: VOICES.riderEn } },
       };
     case "broker":
       return {
@@ -189,7 +193,7 @@ export function agentConfig(key: AgentKey, toolIds: Record<string, string>, even
         system_tools: { ...base.system_tools, voicemail_detection: {} },
         instructions: BROKER_CALLER_PROMPT,
         initial_message: BROKER_CALLER_INITIAL_MESSAGE,
-        language: { primary: "en" },
+        language: { primary: "en", additional: [] }, // PATCH merges: clear any old additional languages
         audio: { output: { voice_id: VOICES.broker } },
       };
     case "callbackEn":
@@ -202,7 +206,7 @@ export function agentConfig(key: AgentKey, toolIds: Record<string, string>, even
         },
         instructions: withName(RIDER_CALLBACK_PROMPT.en),
         initial_message: withName(RIDER_CALLBACK_INITIAL_MESSAGE.en),
-        language: { primary: "en" },
+        language: { primary: "en", additional: [] }, // PATCH merges: clear any old additional languages
         audio: { output: { voice_id: VOICES.riderEn } },
       };
     case "callbackEs":
@@ -214,7 +218,7 @@ export function agentConfig(key: AgentKey, toolIds: Record<string, string>, even
         },
         instructions: withName(RIDER_CALLBACK_PROMPT.es),
         initial_message: withName(RIDER_CALLBACK_INITIAL_MESSAGE.es),
-        language: { primary: "es" },
+        language: { primary: "es", additional: [] },
         audio: { output: { voice_id: VOICES.riderEs } },
       };
   }

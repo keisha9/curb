@@ -105,7 +105,7 @@ export const seed = mutation({
     const maria: SeedMember = {
       name: "Maria Gonzalez",
       phone: phones.maria,
-      preferredLanguage: "es",
+      preferredLanguage: "en", // English only for now; Spanish ("es") paths stay in code
       medicalId: "DEMO-90000001",
       plan: "L.A. Care",
       address: "123 Demo Street, Los Angeles, CA",
@@ -129,7 +129,7 @@ export const seed = mutation({
     const rosa: SeedMember = {
       name: "Rosa Delgado",
       phone: phones.rosa,
-      preferredLanguage: "es",
+      preferredLanguage: "en", // English only for now; Spanish ("es") paths stay in code
       medicalId: "DEMO-90000003",
       plan: "L.A. Care",
       address: "789 Placeholder Ave, Los Angeles, CA",
