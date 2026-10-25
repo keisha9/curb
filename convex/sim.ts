@@ -1,5 +1,5 @@
 // Text-only stand-ins for the phone side, for Phase 1 testing with `npx convex run`.
-// Each step calls the same voiceTools / calls functions the Vapi webhook will call, one
+// Each step calls the same voiceTools / calls functions the Cartesia tool webhooks call, one
 // transaction per step, the way real tool calls arrive. Internal: not callable from clients.
 
 import { v } from "convex/values";
@@ -21,7 +21,7 @@ export const riderBooks = internalAction({
   },
   handler: async (ctx, args): Promise<unknown> => {
     const route = await ctx.runMutation(internal.voiceTools.routeInbound, {
-      vapiCallId: `sim_${crypto.randomUUID()}`,
+      externalCallId: `sim_${crypto.randomUUID()}`,
       callerNumber: args.phone,
     });
     if (route.kind !== "member") return { route };
@@ -139,7 +139,7 @@ export const brokerCallsIn = internalAction({
   args: { brokerPhone: v.string(), confirmationNumber: v.string(), ...vDelayConversation },
   handler: async (ctx, { brokerPhone, confirmationNumber, ...rest }): Promise<unknown> => {
     const route = await ctx.runMutation(internal.voiceTools.routeInbound, {
-      vapiCallId: `sim_${crypto.randomUUID()}`,
+      externalCallId: `sim_${crypto.randomUUID()}`,
       callerNumber: brokerPhone,
     });
     if (route.kind !== "broker") return { route };
@@ -159,7 +159,7 @@ export const brokerCallsIn = internalAction({
 export const riderReportsDelay = internalAction({
   args: { phone: v.string(), minutesLate: v.optional(v.number()) },
   handler: async (ctx, { phone, minutesLate }): Promise<unknown> => {
-    const route = await ctx.runMutation(internal.voiceTools.routeInbound, { vapiCallId: `sim_${crypto.randomUUID()}`, callerNumber: phone });
+    const route = await ctx.runMutation(internal.voiceTools.routeInbound, { externalCallId: `sim_${crypto.randomUUID()}`, callerNumber: phone });
     if (route.kind !== "member") return { route };
     await say(ctx, route.callId, "rider", "My driver is late.");
     const r = await ctx.runMutation(internal.voiceTools.reportDelayRider, { callId: route.callId, minutesLate });

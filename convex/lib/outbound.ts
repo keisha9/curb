@@ -1,22 +1,18 @@
-// Outbound calls (Vapi) and SMS (Twilio), used by brain actions.
-// Every number passes checkOutbound first. When the provider key is not set, the call
-// or text is stubbed: it is written to the database only, so Phase 1 runs in text.
+// Outbound calls (Cartesia Managed Agents) and SMS (Twilio), used by brain actions.
+// Every number passes checkOutbound first. When Cartesia is not set up (no API key or
+// no voiceConfig from cartesiaSetup:run), the call is stubbed: written to the database
+// only, so everything also runs in text. SMS is stubbed while Twilio is unset (current plan).
 
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
+import { cartesia, cartesiaConfigured } from "./cartesia";
 import { checkOutbound } from "./safety";
 import type { Lang } from "./wording";
 
 type OutboundRole = "broker_booking" | "broker_delay" | "rider_callback";
 
 export type PlaceCallResult = { ok: true; callId: Id<"calls">; stubbed: boolean } | { ok: false; error: string };
-
-const ASSISTANT_ENV: Record<OutboundRole, string> = {
-  broker_booking: "VAPI_BROKER_CALLER_ASSISTANT_ID",
-  broker_delay: "VAPI_BROKER_CALLER_ASSISTANT_ID",
-  rider_callback: "VAPI_RIDER_ASSISTANT_ID",
-};
 
 export async function placeCall(
   ctx: ActionCtx,
@@ -25,12 +21,12 @@ export async function placeCall(
     role: OutboundRole;
     to: string;
     variableValues: Record<string, string>;
-    firstMessage?: string;
     memberId?: Id<"members">;
     brokerId?: Id<"brokers">;
     language?: Lang;
     policyAction?: string;
     delayReportId?: Id<"delayReports">;
+    updateText?: string;
   },
 ): Promise<PlaceCallResult> {
   const check = checkOutbound(args.to);
@@ -46,7 +42,7 @@ export async function placeCall(
   const callId = await ctx.runMutation(internal.calls.create, {
     role: args.role,
     direction: "outbound",
-    vapiCallId: `pending_${crypto.randomUUID()}`,
+    externalCallId: `pending_${crypto.randomUUID()}`,
     status: "ringing",
     rideId: args.rideId,
     memberId: args.memberId,
@@ -54,40 +50,46 @@ export async function placeCall(
     language: args.language,
     policyAction: args.policyAction,
     delayReportId: args.delayReportId,
+    updateText: args.updateText,
   });
 
-  const apiKey = process.env.VAPI_API_KEY;
-  if (!apiKey) {
-    await ctx.runMutation(internal.calls.setVapiCallId, { callId, vapiCallId: `stub_${callId}` });
+  const config = cartesiaConfigured() ? await ctx.runQuery(internal.voiceConfig.get, {}) : null;
+  if (!config || !config.fromNumberId) {
+    await ctx.runMutation(internal.calls.setExternalCallId, { callId, externalCallId: `stub_${callId}` });
     await ctx.runMutation(internal.events.log, {
       rideId: args.rideId,
       kind: "call",
-      summary: `Stubbed ${args.role} call to ${args.to} (VAPI_API_KEY not set)`,
+      summary: `Stubbed ${args.role} call to ${args.to} (Cartesia not set up)`,
       payload: { callId, variableValues: args.variableValues },
     });
     return { ok: true, callId, stubbed: true };
   }
 
-  // VERIFY against current Vapi docs (docs/04 section 4): create-call body shape.
+  const agentId =
+    args.role === "rider_callback"
+      ? args.language === "es"
+        ? config.callbackAgentIdEs
+        : config.callbackAgentIdEn
+      : config.brokerAgentId;
+
   try {
-    const res = await fetch("https://api.vapi.ai/call", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        assistantId: process.env[ASSISTANT_ENV[args.role]],
-        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID,
-        customer: { number: args.to },
-        // Our call id rides along so webhooks can match even before setVapiCallId lands.
-        metadata: { callId },
-        assistantOverrides: {
-          variableValues: { ...args.variableValues, callId },
-          ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+    // https://docs.cartesia.ai/line/integrations/telephony/outbound-dialing
+    const res = await cartesia("POST", "/agents/calls", {
+      agent_id: agentId,
+      from_number_id: config.fromNumberId,
+      outbound_calls: [
+        {
+          to_number: args.to,
+          // Our call id rides along so tool calls can find this row before the provider id is stored.
+          dynamic_variables: { ...args.variableValues, app_call_id: callId },
         },
-      }),
+      ],
     });
-    const body = (await res.json().catch(() => ({}))) as { id?: string; message?: unknown };
-    if (!res.ok || !body.id) throw new Error(`Vapi ${res.status}: ${JSON.stringify(body.message ?? body)}`);
-    await ctx.runMutation(internal.calls.setVapiCallId, { callId, vapiCallId: body.id });
+    const entry = (res.body as { calls?: { agent_call_id?: string; error?: unknown }[] } | null)?.calls?.[0];
+    if (!res.ok || !entry?.agent_call_id) {
+      throw new Error(`Cartesia ${res.status}: ${JSON.stringify(entry?.error ?? res.body).slice(0, 300)}`);
+    }
+    await ctx.runMutation(internal.calls.setExternalCallId, { callId, externalCallId: entry.agent_call_id });
     return { ok: true, callId, stubbed: false };
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);

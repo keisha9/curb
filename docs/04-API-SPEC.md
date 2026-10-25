@@ -1,5 +1,7 @@
 # 04 - API Spec
 
+> **Superseded in part (2026-10-24):** voice moved from Vapi to **Cartesia Managed Agents**, and SMS is off for now. Mapping: `/vapi/server` became `POST /voice/tools/<name>` (webhook tools, bearer secret) and `POST /voice/events` (call events, `X-Webhook-Secret`); `assistant-request` routing became the `identify_caller` tool, the first thing the single `inbound-assistant` calls; the rider and broker-inbound assistants are one agent on the one free number; `report_delay` is split into `report_delay_rider` and `report_delay_broker`; rider updates go by callback instead of SMS. See `10-OPEN-DECISIONS.md` and `convex/lib/voiceAgents.ts`.
+
 Payload shapes for Vapi are **sketches from memory. Verify field names against current Vapi docs before coding** (server messages, tool call format, assistant-request, outbound call API).
 
 ## 1. HTTP routes (Convex HTTP actions, `convex/http.ts`)

@@ -84,7 +84,7 @@ beforeEach(() => {
   process.env.ALLOWED_OUTBOUND_NUMBERS = [MARIA, JAMES, ROSA, BROKER].join(",");
   process.env.PORTAL_BASE_URL = "https://demo.test";
   delete process.env.ANTHROPIC_API_KEY;
-  delete process.env.VAPI_API_KEY;
+  delete process.env.CARTESIA_API_KEY;
   delete process.env.TWILIO_ACCOUNT_SID;
 });
 
@@ -113,6 +113,18 @@ describe("booking", () => {
     ride = await rideFor(t, MARIA);
     expect(ride.status).toBe("booked");
     expect(ride.brokerConfirmationNumber).toBe("TR-4821");
+
+    // The rider hears the confirmation by phone, in Spanish, from recorded fields.
+    const callback = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("calls")
+          .withIndex("by_ride", (q) => q.eq("rideId", ride._id))
+          .collect()
+      ).find((c) => c.role === "rider_callback"),
+    );
+    expect(callback?.language).toBe("es");
+    expect(callback?.updateText).toMatch(/^Su transporte está reservado\. Recogida .*7:30.*Confirmación TR-4821\.$/);
 
     const sms = await t.run(async (ctx) => await ctx.db.query("messages").collect());
     expect(sms).toHaveLength(1);
@@ -146,7 +158,7 @@ describe("booking", () => {
   test("unknown caller is declined and nothing is created", async () => {
     const { t } = setup();
     await t.mutation(api.demo.seed, {});
-    const route = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: "v1", callerNumber: STRANGER });
+    const route = await t.mutation(internal.voiceTools.routeInbound, { externalCallId: "v1", callerNumber: STRANGER });
     expect(route.kind).toBe("unknown");
     const rides = await t.run(async (ctx) => await ctx.db.query("rides").collect());
     expect(rides.filter((r) => r.status !== "completed" && r.status !== "cancelled")).toHaveLength(0);
@@ -175,7 +187,8 @@ describe("booking", () => {
     await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
     await settle();
     const ride = await rideFor(t, MARIA);
-    expect((await callsOf(t, ride._id)).map((c) => c.role)).toEqual(["rider_inbound"]);
+    // No broker call went out; the rider (allowlisted) is called back that a person will help.
+    expect((await callsOf(t, ride._id)).map((c) => c.role)).toEqual(["rider_inbound", "rider_callback"]);
     expect(ride.status).toBe("needs_human");
     const errors = (await t.query(api.events.byRide, { rideId: ride._id })).filter((e) => e.kind === "error");
     expect(errors.some((e) => e.summary.includes("not in ALLOWED_OUTBOUND_NUMBERS"))).toBe(true);
@@ -215,7 +228,8 @@ describe("delay reported by the rider", () => {
     ride = await rideFor(t, MARIA);
     expect(ride.status).toBe("replacement_booked");
     expect(ride.replacementConfirmationNumber).toBe("TR-4822");
-    expect((await callsOf(t, rideId)).map((c) => c.role)).toContain("rider_callback");
+    // One callback for the booking, one for the replacement; never the same update twice.
+    expect((await callsOf(t, rideId)).filter((c) => c.role === "rider_callback")).toHaveLength(2);
     expect(await texts(t, rideId)).toEqual(["booked:stubbed", "delay_received:stubbed", "replacement:stubbed"]);
 
     // The website shows the replacement live, with rider-safe wording only.
@@ -344,9 +358,9 @@ describe("delay reported by the broker", () => {
   test("broker tools cannot be used from a rider call, and lookups miss on wrong numbers", async () => {
     const { t, settle } = setup();
     await bookMaria(t, settle);
-    const rider = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: "v2", callerNumber: MARIA });
+    const rider = await t.mutation(internal.voiceTools.routeInbound, { externalCallId: "v2", callerNumber: MARIA });
     await expect(t.mutation(internal.voiceTools.confirmReplacement, { callId: rider.callId, confirmationNumber: "X", ...WINDOW })).rejects.toThrow();
-    const broker = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: "v3", callerNumber: BROKER });
+    const broker = await t.mutation(internal.voiceTools.routeInbound, { externalCallId: "v3", callerNumber: BROKER });
     const miss = await t.mutation(internal.voiceTools.lookupRide, { callId: broker.callId, confirmationNumber: "TR-0000" });
     expect(miss.found).toBe(false);
   });
@@ -427,7 +441,7 @@ describe("English end to end (James)", () => {
 
 describe("clock rules for broker reports", () => {
   async function brokerCallIn(t: T) {
-    const route = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: `v_${Math.random()}`, callerNumber: BROKER });
+    const route = await t.mutation(internal.voiceTools.routeInbound, { externalCallId: `v_${Math.random()}`, callerNumber: BROKER });
     await t.mutation(internal.voiceTools.lookupRide, { callId: route.callId, confirmationNumber: "TR-4821" });
     return route.callId;
   }

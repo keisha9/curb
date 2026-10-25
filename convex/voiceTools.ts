@@ -1,4 +1,4 @@
-// Backing mutations for every Vapi tool (docs/04 section 1.2) plus inbound call routing.
+// Backing mutations for every voice-agent tool (docs/04 section 1.2) plus inbound call routing.
 // They only write, run pure policy, and schedule; they never run the brain inline, so
 // they return well under a second. Each returns `say`: guidance the assistant speaks from.
 
@@ -14,7 +14,7 @@ import { reportDelay, type DelayReportResult } from "./delays";
 import { paperworkStatus, urgentRideObligation, daysUntilExpiry } from "./lib/policy";
 import { parseLocalIso } from "./lib/time";
 import { canTransition } from "./lib/stateMachine";
-import { formatDateTime, formatWindow, statusText } from "./lib/wording";
+import { formatDateTime, formatNowForAgent, formatWindow, statusText } from "./lib/wording";
 
 type CallRole = Doc<"calls">["role"];
 const RIDER_ROLES: CallRole[] = ["rider_inbound", "rider_callback"];
@@ -41,11 +41,11 @@ function firstName(name: string): string {
 
 /** Create the call row and decide which assistant answers, by caller number. Never creates a ride. */
 export const routeInbound = internalMutation({
-  args: { vapiCallId: v.string(), callerNumber: v.string() },
-  handler: async (ctx, { vapiCallId, callerNumber }) => {
+  args: { externalCallId: v.string(), callerNumber: v.string() },
+  handler: async (ctx, { externalCallId, callerNumber }) => {
     const existing = await ctx.db
       .query("calls")
-      .withIndex("by_vapiCallId", (q) => q.eq("vapiCallId", vapiCallId))
+      .withIndex("by_externalCallId", (q) => q.eq("externalCallId", externalCallId))
       .first();
 
     const member = await ctx.db
@@ -65,7 +65,7 @@ export const routeInbound = internalMutation({
       (await createCall(ctx, {
         role,
         direction: "inbound",
-        vapiCallId,
+        externalCallId,
         status: "ringing",
         memberId: member?._id,
         brokerId: broker?._id,
@@ -93,12 +93,12 @@ export const routeInbound = internalMutation({
           activeRideSummary: active
             ? `${active.destinationName ?? "appointment"} on ${active.appointmentAt ? formatDateTime(active.appointmentAt, lang) : "?"}, status ${active.status}, pickup ${formatWindow(active.pickupWindowStart, active.pickupWindowEnd, lang)}`
             : "none",
-          now: formatDateTime(Date.now(), lang),
+          now: formatNowForAgent(Date.now()),
         },
       };
     }
     if (broker) {
-      return { kind: "broker" as const, callId, variables: { brokerName: broker.name, now: formatDateTime(Date.now(), "en") } };
+      return { kind: "broker" as const, callId, variables: { brokerName: broker.name, now: formatNowForAgent(Date.now()) } };
     }
     return { kind: "unknown" as const, callId };
   },
@@ -161,7 +161,7 @@ export const checkEligibility = internalMutation({
         await transitionRide(ctx, ride._id, "ineligible", `paperwork ${status.reason}`);
         await ctx.scheduler.runAfter(0, internal.brain.run, { rideId: ride._id, trigger: "ineligible" });
         const form = status.kind === "PCS" ? "the doctor's transportation form (PCS)" : "the plan's ride approval";
-        say = `Not eligible: ${form} is ${status.reason === "missing" ? "missing" : "expired"}. Explain gently that it must be renewed with their doctor or health plan before a ride can be booked. Do not book. They will get a text with this information.`;
+        say = `Not eligible: ${form} is ${status.reason === "missing" ? "missing" : "expired"}. Explain gently that it must be renewed with their doctor or health plan before a ride can be booked. Do not book.`;
       }
     }
     await logTool(ctx, ride._id, "check_eligibility", { appointmentAt }, say);
@@ -191,7 +191,7 @@ export const submitRideRequest = internalMutation({
     }
     if (ride.status !== "collecting" && ride.status !== "needs_info") {
       if (ride.status === "ineligible") return await done("Not submitted: the paperwork is not valid. Do not book.", false);
-      return await done("Already submitted. Tell the caller you are calling the ride company and they will get a text.", true);
+      return await done("Already submitted. Tell the caller you are calling the ride company and will call them back with the pickup time.", true);
     }
     const at = parseLocalIso(args.appointmentAt);
     if (at === null || at < Date.now()) {
@@ -222,7 +222,7 @@ export const submitRideRequest = internalMutation({
     });
     await ctx.scheduler.runAfter(0, internal.brain.run, { rideId: ride._id, trigger: "new_request" });
     return await done(
-      "Request saved. Tell the caller you will now call the ride company, and they will get a text message with the pickup time and a link to see their trips. Do not say the ride is booked.",
+      "Request saved. Tell the caller you will now call the ride company, and you will call them back with the pickup time. Do not say the ride is booked.",
       true,
     );
   },
@@ -230,19 +230,19 @@ export const submitRideRequest = internalMutation({
 
 function riderDelaySay(result: DelayReportResult): string {
   if (result.outcome !== "evaluated") {
-    return "We already have this report and are working on it. Tell the caller they will get a call and a text with the update.";
+    return "We already have this report and are working on it. Tell the caller we will call them back with the update.";
   }
   switch (result.evaluation!.action) {
     case "request_urgent_replacement":
-      return "The driver is past the allowed wait. Tell the caller you are asking the ride company for an urgent replacement ride now, and they will get a call and a text. Do not promise the replacement.";
+      return "The driver is past the allowed wait. Tell the caller you are asking the ride company for an urgent replacement ride now, and you will call them back. Do not promise the replacement.";
     case "verify_with_broker":
-      return "Tell the caller you are checking with the ride company about the driver now, and they will get a call or a text with an update.";
+      return "Tell the caller you are checking with the ride company about the driver now, and you will call them back with an update.";
     case "notify_rider_only":
-      return "The delay is within the plan's wait time, so no replacement yet. Tell the caller you will text them the new estimated pickup time, and to call back if the driver does not arrive.";
+      return "The delay is within the plan's wait time, so no replacement yet. Tell the caller you will call them back with the new estimated pickup time, and to call again if the driver does not arrive.";
     case "escalate_to_human":
-      return "This is already a replacement ride. Tell the caller a person needs to help, they will get a text, and they can also call their health plan.";
+      return "This is already a replacement ride. Tell the caller a person needs to help, and they can also call their health plan.";
     case "reject":
-      return "That ride does not have a booked pickup yet. Tell the caller you will text them as soon as it is booked.";
+      return "That ride does not have a booked pickup yet. Tell the caller you will call them back as soon as it is booked.";
   }
 }
 
@@ -254,7 +254,7 @@ export const reportDelayRider = internalMutation({
     const ride = await activeRideForMember(ctx, call.memberId);
     if (!ride) {
       const say = "No upcoming ride found. Say so, and offer to book one.";
-      await logTool(ctx, undefined, "report_delay", args, say);
+      await logTool(ctx, undefined, "report_delay_rider", args, say);
       return { say };
     }
     await ctx.db.patch(call._id, { rideId: call.rideId ?? ride._id, intent: "report_delay" });
@@ -267,7 +267,7 @@ export const reportDelayRider = internalMutation({
       note: args.note,
     });
     const say = riderDelaySay(result);
-    await logTool(ctx, ride._id, "report_delay", args, say);
+    await logTool(ctx, ride._id, "report_delay_rider", args, say);
     return { say, action: result.evaluation?.action ?? null };
   },
 });
@@ -370,7 +370,7 @@ export const reportDelayBroker = internalMutation({
     if (!ride && args.confirmationNumber) ride = await rideByConfirmation(ctx, args.confirmationNumber);
     if (!ride) {
       const say = "No ride found. Ask the broker for the confirmation number and call lookup_ride.";
-      await logTool(ctx, undefined, "report_delay", args, say);
+      await logTool(ctx, undefined, "report_delay_broker", args, say);
       return { say };
     }
     if (!call.rideId) await ctx.db.patch(call._id, { rideId: ride._id, intent: "broker_report" });
@@ -400,11 +400,11 @@ export const reportDelayBroker = internalMutation({
     } else if (result.evaluation?.action === "reject") {
       say = "That ride has no booked pickup on record. Thank the broker and say you will follow up.";
     } else if (result.evaluation?.action === "verify_with_broker") {
-      say = "No delay time was given, and the driver is still within the plan's wait time. Ask the broker how many minutes late the driver is, or the new estimated arrival, then call report_delay again with it.";
+      say = "No delay time was given, and the driver is still within the plan's wait time. Ask the broker how many minutes late the driver is, or the new estimated arrival, then call report_delay_broker again with it.";
     } else {
       say = "Within the plan's wait time, so no replacement is needed. Thank the broker. The member will be told the new estimated pickup.";
     }
-    await logTool(ctx, ride._id, "report_delay", args, say);
+    await logTool(ctx, ride._id, "report_delay_broker", args, say);
     return { say };
   },
 });

@@ -22,10 +22,10 @@ Medi-Cal covers rides to medical appointments (NEMT and NMT), but booking runs t
 
 | Layer | Choice |
 |---|---|
-| Voice and telephony | Vapi with Cartesia voice |
+| Voice and telephony | Cartesia Managed Agents (Sonic voices, Claude Haiku 5.5 for turns, Cartesia phone number) |
 | Backend, database, webhooks, schedulers, live data for both web apps | Convex |
 | Reasoning | Anthropic Messages API (Haiku 5.5 fast paths, Sonnet 5.5 decisions) |
-| SMS | Twilio |
+| SMS | Twilio, **off for now**: riders get a callback and see updates on the trips website; texts are recorded and will send once Twilio is configured |
 | Web apps | One React + Vite + TypeScript app with two route trees: `/ops` (dashboard) and `/trips` (rider website). Default, see 10-OPEN-DECISIONS |
 | Rider website login | Texted magic link. Default, see 10-OPEN-DECISIONS |
 
@@ -73,7 +73,17 @@ npx convex run demo:reset && npx convex run demo:seed
 npm test                             # policy unit tests + end-to-end scenarios (stubbed calls/SMS, scripted brain)
 ```
 
-Without `VAPI_API_KEY` and the Twilio variables, calls and texts are **stubbed**: they are written to the database and shown in the decision log, but nothing is dialed or sent. Without `ANTHROPIC_API_KEY`, the brain runs in **scripted** mode (the trigger table from `docs/05` section 7, deterministic).
+### Voice (Cartesia Managed Agents)
+
+```bash
+npx convex env set VOICE_WEBHOOK_SECRET "$(openssl rand -hex 32)"   # shared secret for tool and event webhooks
+# set CARTESIA_API_KEY in the Convex dashboard
+npx convex run cartesiaSetup:run '{"provisionNumber":true}'          # creates tools, event webhook, 4 agents; claims and assigns the number
+```
+
+`cartesiaSetup:run` is idempotent; run it again after changing prompts or tools (`convex/prompts/`, `convex/lib/voiceAgents.ts`). Agents: `inbound-assistant` (the one number, riders and brokers), `broker-caller`, `rider-callback-en`, `rider-callback-es`.
+
+Without Cartesia set up (or the Twilio variables), calls and texts are **stubbed**: they are written to the database and shown in the decision log, but nothing is dialed or sent. Without `ANTHROPIC_API_KEY`, the brain runs in **scripted** mode (the trigger table from `docs/05` section 7, deterministic).
 
 ### Try the flow in text (Phase 1)
 
@@ -88,7 +98,7 @@ npx convex run events:byRide '{"rideId":"<id>"}'  # the decision log
 Other simulations: `sim:riderReportsDelay`, `sim:brokerAnswersDelayCall`, `demo:simulateDelay '{"as":"rider"}'`.
 
 Convex environment variables (set with `npx convex env set`, never in the repo; full list with notes in `.env.example`):
-`ANTHROPIC_API_KEY`, `BRAIN_MODE`, `LLM_RIDE_TOKEN_BUDGET`, `VAPI_API_KEY`, `VAPI_RIDER_ASSISTANT_ID`, `VAPI_BROKER_CALLER_ASSISTANT_ID`, `VAPI_BROKER_INBOUND_ASSISTANT_ID`, `VAPI_PHONE_NUMBER_ID`, `VAPI_WEBHOOK_SECRET`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `PORTAL_BASE_URL` (used in SMS links), `PORTAL_TOKEN_TTL_DAYS`, `ALLOWED_OUTBOUND_NUMBERS` (comma-separated E.164 list, the only numbers the system may ever dial or text), `DEMO_MARIA_PHONE`, `DEMO_JAMES_PHONE`, `DEMO_ROSA_PHONE`, `DEMO_BROKER_PHONE`.
+`ANTHROPIC_API_KEY`, `BRAIN_MODE`, `LLM_RIDE_TOKEN_BUDGET`, `CARTESIA_API_KEY`, `VOICE_WEBHOOK_SECRET`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `PORTAL_BASE_URL` (used in SMS links), `PORTAL_TOKEN_TTL_DAYS`, `ALLOWED_OUTBOUND_NUMBERS` (comma-separated E.164 list, the only numbers the system may ever dial or text), `DEMO_MARIA_PHONE`, `DEMO_JAMES_PHONE`, `DEMO_ROSA_PHONE`, `DEMO_BROKER_PHONE`.
 
 ## Known limitations
 

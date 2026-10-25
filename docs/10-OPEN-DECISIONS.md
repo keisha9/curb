@@ -6,7 +6,7 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 
 | Decision | Answer |
 |---|---|
-| Voice and telephony | Vapi with Cartesia voice |
+| Voice and telephony | ~~Vapi with Cartesia voice~~ **Cartesia Managed Agents** for voice, numbers, and calls (2026-10-24) |
 | Builder | Solo |
 | Doc format | Markdown files in the repo for Claude Code |
 | Mock broker | A judge or teammate plays the broker live |
@@ -18,6 +18,7 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | Product name | Placeholder `PROJECT_NAME`, easy to change (see README, Naming) |
 | Section 2 defaults | All accepted as-is (2026-10-24) |
 | Repo | `project-name`, public on GitHub |
+| SMS | Off for now (2026-10-24): the trips website shows updates, and the rider gets a callback. Texts are still recorded and will send if Twilio is set |
 | Seed phone numbers | Placeholders via Convex env vars (`DEMO_MARIA_PHONE`, `DEMO_JAMES_PHONE`, `DEMO_ROSA_PHONE`, `DEMO_BROKER_PHONE`); fictional 555-01xx numbers until set |
 
 ## 2. Defaults I set because the docs needed them (change any you disagree with)
@@ -93,3 +94,13 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | 2026-10-24 | Clock-based delay rules (03 rules 4-5) apply to rider **and broker** reports, but not to `ops_dashboard` reports; a dashboard report with no time gets `verify_with_broker` | Decided by you. Simulated reports should not depend on the real clock |
 | 2026-10-24 | A repeat report from the same channel within 2 minutes is a duplicate only if it carries the same minutes and ETA | Lets the broker answer "how late?" on the same call after a no-time report |
 | 2026-10-24 | When a broker call-in ends with only `verify_with_broker` (late, no time), the brain calls the broker back for driver status | Same pattern as the call-in with no replacement arranged |
+| 2026-10-24 | Switched voice to Cartesia Managed Agents; dropped Vapi | Decided by you. Vapi's free numbers are inbound-only; Cartesia provides a free US number that can call out, hosts the agents, and is the sponsor's recommended route |
+| 2026-10-24 | One inbound agent (`inbound-assistant`) serves riders and brokers; it calls `identify_caller` first | The free plan has one number slot, and a number routes to one agent. The server already limits each caller's tools by call role |
+| 2026-10-24 | Voice agents run `claude-haiku-5.5` through Cartesia (listed at ~576 ms average latency) | Matches the planned model; billed by Cartesia, not our Anthropic key |
+| 2026-10-24 | Inbound agent: Spanish primary with English as an additional language, voice Ximena (es-MX). Callbacks: one agent per language (Skylar en, Ximena es). Broker caller: English, voice Daniel | Spanish is the demo's strongest moment; a distinct broker voice helps the audience tell speakers apart. English callers on the inbound line hear a Spanish-native voice |
+| 2026-10-24 | Rider updates by callback: booking confirmed, new ETA (unless the rider reported it on the call), replacement, needs a person. The same update is never called in twice | SMS is off; the rider still has to hear the outcome (F8) |
+| 2026-10-24 | Shared secret `VOICE_WEBHOOK_SECRET` for both tool webhooks (bearer) and call events (`X-Webhook-Secret`); raw event payloads are kept in `webhookLog` | Cartesia supports both; payload field names still need checking against real calls |
+
+## 6. New questions from the build
+
+1. Without SMS, how does the rider get the trips website link? Options: the callback reads a short link aloud, the ops dashboard shows a QR code to scan during the demo, or turn SMS on later.

@@ -172,7 +172,7 @@ export const seed = mutation({
   },
 });
 
-const RESET_TABLES = ["rides", "calls", "transcriptLines", "delayReports", "agentEvents", "messages", "portalTokens", "llmUsage"] as const;
+const RESET_TABLES = ["rides", "calls", "transcriptLines", "delayReports", "agentEvents", "messages", "portalTokens", "llmUsage", "webhookLog"] as const;
 
 /** Clears rides, calls, transcripts, reports, events, texts, tokens, and usage. Keeps members and brokers. */
 export const reset = mutation({

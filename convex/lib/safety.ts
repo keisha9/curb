@@ -1,4 +1,4 @@
-// Outbound safety. Every Vapi call and Twilio SMS must pass checkOutbound first.
+// Outbound safety. Every outbound call and SMS must pass checkOutbound first.
 // Never bypass this, even for testing (CLAUDE.md hard rule 1).
 
 const E164 = /^\+[1-9]\d{6,14}$/;

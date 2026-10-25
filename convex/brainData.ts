@@ -9,7 +9,7 @@ import { reportDelay } from "./delays";
 import { canTransition } from "./lib/stateMachine";
 import type { Doc, Id } from "./_generated/dataModel";
 
-export type BrainCall = Pick<Doc<"calls">, "role" | "status" | "policyAction" | "delayReportId" | "outcome" | "summary" | "createdAt"> & {
+export type BrainCall = Pick<Doc<"calls">, "role" | "status" | "policyAction" | "delayReportId" | "outcome" | "summary" | "updateText" | "createdAt"> & {
   _id: Id<"calls">;
 };
 export type BrainContext = {
@@ -56,6 +56,7 @@ export const getContext = internalQuery({
         delayReportId: c.delayReportId,
         outcome: c.outcome,
         summary: c.summary,
+        updateText: c.updateText,
         createdAt: c.createdAt,
       })),
       smsTemplatesSent: messages.filter((m) => m.status === "sent" || m.status === "stubbed").map((m) => m.template ?? ""),

@@ -73,6 +73,23 @@ export function formatDay(ts: number, lang: Lang): string {
   );
 }
 
+/** Unambiguous "now" for voice agents, which turn spoken dates into ISO: "Saturday, October 24, 2026, 8:29 PM (2026-10-24)". */
+export function formatNowForAgent(ts: number): string {
+  const long = tidy(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: TIME_ZONE,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(ts),
+  );
+  const isoDate = new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(ts);
+  return `${long} (${isoDate}, Los Angeles time)`;
+}
+
 export function formatDateTime(ts: number, lang: Lang): string {
   return `${formatDay(ts, lang)}, ${formatTime(ts, lang)}`;
 }

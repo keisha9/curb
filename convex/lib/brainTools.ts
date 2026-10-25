@@ -12,6 +12,7 @@ import { evaluateDelay, paperworkStatus, urgentRideObligation } from "./policy";
 import { placeCall, sendSms, type PlaceCallResult } from "./outbound";
 import {
   formatDateTime,
+  formatNowForAgent,
   formatWindow,
   renderSms,
   SMS_TEMPLATE_NAMES,
@@ -93,7 +94,8 @@ export const BRAIN_TOOLS: Anthropic.Beta.BetaTool[] = [
   },
   {
     name: "place_rider_callback",
-    description: "Calls the rider with the current update (replacement ride, new ETA, or that a person will help). The wording comes from recorded fields.",
+    description:
+      "Calls the rider with the current update: ride booked, new ETA, replacement ride, or that a person will help. The wording comes from recorded fields. This call is how the rider hears news (texts are not sent for now). Skipped if they already heard this exact update.",
     input_schema: noArgs,
   },
   {
@@ -209,7 +211,7 @@ function brokerVariables(
   const reporter = report?.reportedBy ?? "rider";
   return {
     appName: APP_NAME_SPOKEN,
-    now: formatDateTime(Date.now(), "en"),
+    now: formatNowForAgent(Date.now()),
     mode,
     mode_phrase: mode === "booking" ? "book a ride" : "follow up on a late ride",
     memberName: m.name,
@@ -237,6 +239,11 @@ function callbackUpdate(c: Context): { outcome: string; text: string } | null {
   const r = c.ride;
   const lang = rideLang(c);
   switch (r.status) {
+    case "booked":
+      return {
+        outcome: "booked",
+        text: `${statusText("booked", lang, r)} ${lang === "es" ? "Confirmación" : "Confirmation"} ${r.brokerConfirmationNumber ?? ""}.`,
+      };
     case "replacement_booked":
       return {
         outcome: "replacement_booked",
@@ -341,6 +348,10 @@ export async function executeTool(run: BrainRun, name: string, input: unknown): 
         out = fail(`no rider update to give while the ride is ${c.ride.status}`);
         break;
       }
+      if (c.calls.some((x) => x.role === "rider_callback" && x.updateText === update.text)) {
+        out = { ok: true, result: { skipped: "the rider was already called with this exact update" } };
+        break;
+      }
       run.sideEffects += 1;
       const lang = rideLang(c);
       const placed: PlaceCallResult = await placeCall(ctx, {
@@ -349,9 +360,10 @@ export async function executeTool(run: BrainRun, name: string, input: unknown): 
         to: c.member.phone,
         memberId: c.member._id,
         language: lang,
+        updateText: update.text,
         variableValues: {
           appName: APP_NAME_SPOKEN,
-          memberName: c.member.name,
+          memberName: c.member.name.split(" ")[0] ?? c.member.name,
           language: lang,
           outcome: update.outcome,
           updateText: update.text,
@@ -435,10 +447,15 @@ export async function executeTool(run: BrainRun, name: string, input: unknown): 
 export async function runScripted(run: BrainRun): Promise<void> {
   const decide = (text: string) => executeTool(run, "record_decision", { text });
   const sms = (template: SmsTemplate) => executeTool(run, "send_sms", { template });
+  // Texts are recorded (and sent once Twilio is configured); the callback is how the rider hears it now.
+  const tellRider = async (template: SmsTemplate) => {
+    await executeTool(run, "place_rider_callback", {});
+    await sms(template);
+  };
   const humanAndTell = async (reason: string) => {
     await decide(`Escalating to a person: ${reason}`);
     await executeTool(run, "flag_needs_human", { reason });
-    await sms("needs_human");
+    await tellRider("needs_human");
   };
 
   const c = await loadContext(run);
@@ -447,7 +464,7 @@ export async function runScripted(run: BrainRun): Promise<void> {
 
   switch (run.trigger) {
     case "ineligible":
-      await decide("Paperwork is not valid for this appointment; texting the rider how to renew.");
+      await decide("Paperwork is not valid for this appointment (the rider was told on the call); recording the renewal notice.");
       await sms("ineligible");
       return;
 
@@ -476,8 +493,14 @@ export async function runScripted(run: BrainRun): Promise<void> {
           return;
         }
         case "notify_rider_only":
-          await decide("Delay is within the threshold; texting the rider the new ETA, no replacement requested.");
-          await sms("delay_update");
+          if (report.channel === "rider_call") {
+            // The rider is on the phone and has just been told; keep the record only.
+            await decide("Delay is within the threshold; the rider was told on their call. No replacement requested.");
+            await sms("delay_update");
+          } else {
+            await decide("Delay is within the threshold; calling the rider with the new ETA, no replacement requested.");
+            await tellRider("delay_update");
+          }
           return;
         case "escalate_to_human":
           await humanAndTell("the replacement ride is also delayed");
@@ -499,8 +522,8 @@ export async function runScripted(run: BrainRun): Promise<void> {
 
       if (call.role === "broker_booking") {
         if (ride.status === "booked") {
-          await decide(`Booking confirmed (${ride.brokerConfirmationNumber}); texting the rider.`);
-          await sms("booked");
+          await decide(`Booking confirmed (${ride.brokerConfirmationNumber}); calling the rider with the pickup time.`);
+          await tellRider("booked");
           return;
         }
         const attempts = c.calls.filter((x) => x.role === "broker_booking").length;
@@ -512,7 +535,7 @@ export async function runScripted(run: BrainRun): Promise<void> {
         if (ride.status !== "needs_human") {
           await humanAndTell(call.outcome?.result === "refused" ? `broker refused: ${call.outcome.refusalReason ?? "no reason"}` : "booking not confirmed after the broker call");
         } else {
-          await sms("needs_human");
+          await tellRider("needs_human");
         }
         return;
       }
@@ -520,13 +543,12 @@ export async function runScripted(run: BrainRun): Promise<void> {
       // broker_delay or broker_inbound
       switch (ride.status) {
         case "replacement_booked":
-          await decide(`Replacement ride confirmed (${ride.replacementConfirmationNumber}); calling and texting the rider.`);
-          await executeTool(run, "place_rider_callback", {});
-          await sms("replacement");
+          await decide(`Replacement ride confirmed (${ride.replacementConfirmationNumber}); calling the rider.`);
+          await tellRider("replacement");
           return;
         case "delayed":
-          await decide("Broker gave a new ETA within the threshold; texting the rider the update.");
-          await sms("delay_update");
+          await decide("Broker gave a new ETA within the threshold; calling the rider with the update.");
+          await tellRider("delay_update");
           return;
         case "late":
         case "recovery_calling":
@@ -540,7 +562,7 @@ export async function runScripted(run: BrainRun): Promise<void> {
           return;
         case "needs_human":
           await decide("Ride needs a person; making sure the rider was told.");
-          await sms("needs_human");
+          await tellRider("needs_human");
           return;
         case "booked": {
           if (call.role === "broker_inbound") {

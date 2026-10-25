@@ -153,12 +153,14 @@ export default defineSchema({
     role: vCallRole,
     direction: v.union(v.literal("inbound"), v.literal("outbound")),
     intent: v.optional(v.string()),
-    vapiCallId: v.string(),
+    externalCallId: v.string(),
     status: vCallStatus,
     language: v.optional(v.string()),
     // For outbound broker calls: the policy action the call was placed for.
     policyAction: v.optional(v.string()),
     delayReportId: v.optional(v.id("delayReports")),
+    // Rider callbacks: the exact update spoken, so the same update is never called in twice.
+    updateText: v.optional(v.string()),
     startedAt: v.optional(v.number()),
     endedAt: v.optional(v.number()),
     summary: v.optional(v.string()),
@@ -167,7 +169,7 @@ export default defineSchema({
     error: v.optional(v.string()),
     createdAt: v.number(),
   })
-    .index("by_vapiCallId", ["vapiCallId"])
+    .index("by_externalCallId", ["externalCallId"])
     .index("by_ride", ["rideId"]),
 
   transcriptLines: defineTable({
@@ -177,7 +179,11 @@ export default defineSchema({
     text: v.string(),
     ts: v.number(),
     isFinal: v.boolean(),
-  }).index("by_call", ["callId", "ts"]),
+    // Provider turn id, so a turn delivered twice (per-turn event and end-of-call transcript) is stored once.
+    turnId: v.optional(v.string()),
+  })
+    .index("by_call", ["callId", "ts"])
+    .index("by_turn", ["callId", "turnId"]),
 
   agentEvents: defineTable({
     rideId: v.optional(v.id("rides")),
@@ -222,6 +228,27 @@ export default defineSchema({
     cacheWriteTokens: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_ride", ["rideId"]),
+
+  // Cartesia Managed Agents setup, written by cartesiaSetup:run (ids are not secrets).
+  voiceConfig: defineTable({
+    inboundAgentId: v.string(),
+    brokerAgentId: v.string(),
+    callbackAgentIdEn: v.string(),
+    callbackAgentIdEs: v.string(),
+    fromNumberId: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
+    eventWebhookId: v.optional(v.string()),
+    toolIds: v.record(v.string(), v.string()),
+    updatedAt: v.number(),
+  }),
+
+  // Raw provider webhook payloads (truncated), to check field names against real calls. Cleared on reset.
+  webhookLog: defineTable({
+    source: v.string(),
+    type: v.string(),
+    body: v.string(),
+    createdAt: v.number(),
+  }),
 
   demoState: defineTable({
     activeRideId: v.optional(v.id("rides")),

@@ -4,7 +4,7 @@ You are helping one developer build PROJECT_NAME for Cal Hacks 13.0. Speed and a
 
 ## What this project is
 
-A voice agent that books Medi-Cal medical rides by phone and recovers delayed rides. Rider calls in (English or Spanish) through Vapi. Convex is the backend for everything. A Claude "brain" runs inside Convex actions and decides what to do. A human plays the broker on the phone during the demo.
+A voice agent that books Medi-Cal medical rides by phone and recovers delayed rides. Rider calls in (English or Spanish) through Cartesia Managed Agents. Convex is the backend for everything. A Claude "brain" runs inside Convex actions and decides what to do. A human plays the broker on the phone during the demo.
 
 Delays can be reported by the **rider** (on a call or on the website) or by the **broker** (by calling in, or during a call the agent places). All reports go through one function, `delays.report`, and one deterministic policy, `policy.evaluateDelay`.
 
@@ -13,9 +13,9 @@ Two web UIs share one React app: `/ops` (demo controls, transcripts, decision lo
 ## Stack
 
 - Convex (TypeScript): schema, queries, mutations, actions, HTTP actions, scheduled functions, crons
-- Vapi: phone numbers, STT, turn-taking, outbound calls. Cartesia is the voice provider
+- Cartesia Managed Agents: phone number, STT, turn-taking, outbound calls, Sonic voices; agents run Claude Haiku 5.5 (Cartesia-managed). Defined in `convex/lib/voiceAgents.ts` + `convex/prompts/`, applied with `cartesiaSetup:run`
 - Anthropic Messages API via `@anthropic-ai/sdk` (no Agent SDK). Models: `claude-haiku-5-5` for speed paths, `claude-sonnet-5-5` for decisions
-- Twilio: SMS
+- Twilio: SMS (off for now; riders get callbacks and the trips website)
 - React + Vite + TypeScript + Tailwind for both web UIs
 
 ## Hard rules
@@ -25,7 +25,7 @@ Two web UIs share one React app: `/ops` (demo controls, transcripts, decision lo
 3. **No secrets in the repo.** Keys live in Convex env vars and a gitignored `.env`. Keep `.env.example` current.
 4. **Policy checks are code, not model guesses.** Paperwork validity, expiration, and delay evaluation are deterministic functions in `convex/lib/policy.ts`. The model calls them as tools and explains the result. It never decides eligibility or whether the urgent-ride obligation applies.
 5. **No booking without rider confirmation.** The brain must refuse to place a booking call unless `rides.riderConfirmedAt` is set.
-6. **Vapi tool handlers must return fast** (target under 1 second). They write to Convex, run pure policy functions, and schedule heavy work with `ctx.scheduler.runAfter(0, ...)`. They never run the brain inline.
+6. **Voice tool handlers must return fast** (target under 1 second). They write to Convex, run pure policy functions, and schedule heavy work with `ctx.scheduler.runAfter(0, ...)`. They never run the brain inline.
 7. **Cost caps.** Every Anthropic call goes through `convex/lib/llm.ts`, which sets `max_tokens`, logs usage to `llmUsage`, and refuses to run if a ride has exceeded its token budget.
 8. **Log every decision** to `agentEvents` so the ops dashboard can show what the agent did and why.
 9. **Rider website data is scoped by token.** Every `portal.*` function takes the token, resolves it to one member, and returns only that member's data. Never return `agentEvents` without a `riderText`, raw transcripts, other members' data, or internal fields.
@@ -35,7 +35,7 @@ Two web UIs share one React app: `/ops` (demo controls, transcripts, decision lo
 ## Conventions
 
 - TypeScript strict mode. Validate all Convex function args with `v` validators. Validate every webhook body before use.
-- Files that call Anthropic, Vapi, or Twilio are actions (add `"use node";` where the Node SDK is needed). Database access goes through queries and mutations only.
+- Files that call Anthropic, Cartesia, or Twilio are actions (add `"use node";` where the Node SDK is needed). Database access goes through queries and mutations only.
 - Ride status changes only through `rides.transition()`, which enforces the state machine in `docs/03-DATA-MODEL.md` and writes the rider-facing wording.
 - Timestamps are milliseconds since epoch. Phone numbers are E.164.
 - Keep prompts in `convex/prompts/` as exported strings, one file per agent. Do not inline prompts in handlers.
@@ -60,6 +60,6 @@ npx convex run demo:reset # clear rides, calls, transcripts, delay reports for a
 ## Working agreements
 
 - If a requirement is ambiguous or a doc conflicts with the code, **ask the developer** instead of choosing silently. Record answers in `docs/10-OPEN-DECISIONS.md`.
-- Anything marked "verify" in the docs (Vapi field names, model availability, Cartesia voices, the driver-lateness threshold) must be checked against current official docs before relying on it.
+- Anything marked "verify" in the docs (Cartesia field names and event payloads, model availability, voices, the driver-lateness threshold) must be checked against current official docs before relying on it.
 - Build in the order given in `docs/06-BUILD-PLAN.md`. Do not start a later phase until the earlier one works end to end. Respect the cut lines.
 - Test the logic in text (via `npx convex run`) before testing by phone.

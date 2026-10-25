@@ -34,7 +34,7 @@ export const create = internalMutation({
   args: {
     role: vCallRole,
     direction: v.union(v.literal("inbound"), v.literal("outbound")),
-    vapiCallId: v.string(),
+    externalCallId: v.string(),
     status: vCallStatus,
     rideId: v.optional(v.id("rides")),
     memberId: v.optional(v.id("members")),
@@ -43,14 +43,15 @@ export const create = internalMutation({
     language: v.optional(v.string()),
     policyAction: v.optional(v.string()),
     delayReportId: v.optional(v.id("delayReports")),
+    updateText: v.optional(v.string()),
   },
   handler: async (ctx, args) => await createCall(ctx, args),
 });
 
-export const setVapiCallId = internalMutation({
-  args: { callId: v.id("calls"), vapiCallId: v.string() },
-  handler: async (ctx, { callId, vapiCallId }) => {
-    await ctx.db.patch(callId, { vapiCallId });
+export const setExternalCallId = internalMutation({
+  args: { callId: v.id("calls"), externalCallId: v.string() },
+  handler: async (ctx, { callId, externalCallId }) => {
+    await ctx.db.patch(callId, { externalCallId });
   },
 });
 
@@ -79,30 +80,76 @@ export const appendTranscript = internalMutation({
     speaker: v.union(v.literal("agent"), v.literal("rider"), v.literal("broker")),
     text: v.string(),
     isFinal: v.boolean(),
+    turnId: v.optional(v.string()),
+    ts: v.optional(v.number()),
   },
-  handler: async (ctx, { callId, speaker, text, isFinal }) => {
+  handler: async (ctx, { callId, speaker, text, isFinal, turnId, ts }) => {
     const call = await ctx.db.get(callId);
     if (!call) return;
-    await ctx.db.insert("transcriptLines", { callId, rideId: call.rideId, speaker, text, isFinal, ts: Date.now() });
+    if (turnId) {
+      const seen = await ctx.db
+        .query("transcriptLines")
+        .withIndex("by_turn", (q) => q.eq("callId", callId).eq("turnId", turnId))
+        .first();
+      if (seen) return;
+    }
+    await ctx.db.insert("transcriptLines", { callId, rideId: call.rideId, speaker, text, isFinal, turnId, ts: ts ?? Date.now() });
   },
 });
 
 /** End of call: store the summary and schedule the brain for broker and callback calls. Idempotent. */
 export const end = internalMutation({
-  args: { callId: v.id("calls"), summary: v.optional(v.string()), recordingUrl: v.optional(v.string()) },
-  handler: async (ctx, { callId, summary, recordingUrl }) => {
+  args: {
+    callId: v.id("calls"),
+    summary: v.optional(v.string()),
+    recordingUrl: v.optional(v.string()),
+    // A call that never connected or errored. The brain still runs, so it can retry or escalate.
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, { callId, summary, recordingUrl, error }) => {
     const call = await ctx.db.get(callId);
     if (!call || call.endedAt !== undefined) return;
-    await ctx.db.patch(callId, { status: "ended", endedAt: Date.now(), summary, recordingUrl });
+    await ctx.db.patch(callId, { status: error ? "failed" : "ended", endedAt: Date.now(), summary, recordingUrl, error });
     await logEvent(ctx, {
       rideId: call.rideId,
-      kind: "call",
-      summary: `${ROLE_LABEL[call.role]} ended${summary ? `: ${summary}` : ""}`,
+      kind: error ? "error" : "call",
+      summary: error ? `${ROLE_LABEL[call.role]} failed: ${error}` : `${ROLE_LABEL[call.role]} ended${summary ? `: ${summary}` : ""}`,
       payload: { callId },
     });
     if (call.rideId && BRAIN_ON_END.has(call.role)) {
       await ctx.scheduler.runAfter(0, internal.brain.run, { rideId: call.rideId, trigger: "call_ended", callId });
     }
+  },
+});
+
+export const setSummary = internalMutation({
+  args: { callId: v.id("calls"), summary: v.string() },
+  handler: async (ctx, { callId, summary }) => {
+    await ctx.db.patch(callId, { summary });
+  },
+});
+
+/** Find our call row for a provider call: by our own id (outbound dynamic variable) or by the provider id. */
+export const findForProvider = internalQuery({
+  args: { appCallId: v.optional(v.string()), externalCallId: v.optional(v.string()) },
+  handler: async (ctx, { appCallId, externalCallId }) => {
+    const id = appCallId ? ctx.db.normalizeId("calls", appCallId) : null;
+    if (id) {
+      const call = await ctx.db.get(id);
+      if (call) return call;
+    }
+    if (!externalCallId) return null;
+    return await ctx.db
+      .query("calls")
+      .withIndex("by_externalCallId", (q) => q.eq("externalCallId", externalCallId))
+      .first();
+  },
+});
+
+export const logWebhook = internalMutation({
+  args: { source: v.string(), type: v.string(), body: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("webhookLog", { ...args, body: args.body.slice(0, 20_000), createdAt: Date.now() });
   },
 });
 
