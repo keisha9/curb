@@ -115,13 +115,11 @@ None.
 ### Feedback about technology
 
 ```
-Cartesia (Managed Agents): Haiku 5.5 through Cartesia was fast enough to feel natural on the phone, and getting a free number that can call out was what made my outbound broker calls possible. Strict request validation gave precise errors, which made the API easy to discover. Things that cost me time: a tool whose custom dynamic variable is unset on a call fails before it is sent, and the error only shows up inside the call transcript; event payload shapes (call_turn and call_completed carry turns in `body`, with numeric ids) weren't in the docs I could reach; some API reference pages require logging in; POST /agents and POST /v1/agents create different kinds of agent; and a PATCH merges the language list, so switching an agent's primary language needed an explicit empty `additional` list. One number routing to one agent also meant one agent had to serve both of my caller types.
+Cartesia: Managed Agents with Haiku 5.5 felt natural on the phone, and a free number that can call out made the project possible. Wish list: clearer docs on webhook event payloads, and a visible error when a tool's dynamic variable is unset (it fails silently mid-call).
 
-Convex: the anonymous local deployment let me build and test with no account, and live queries meant zero polling code for two live UIs. HTTP actions, the scheduler (for missed-call retries), and convex-test for end-to-end tests covered everything I needed. The main friction was TypeScript's circular inference when a function calls its own module through `internal`, which needs explicit return types.
+Convex: live queries, HTTP actions, and the scheduler covered the whole backend with no polling code, and the no-account local deployment made early testing easy.
 
-Anthropic (Claude API): prompt caching cut the brain's input cost noticeably across turns, and the server-side refusal fallback was a one-line safety net. Keeping the brain on Sonnet 5.5 and the fast paths on Haiku 5.5 kept a full ride well under budget.
-
-GitHub Pages: free and easy to automate with Actions, but single-page app routes need a 404.html fallback or a copied route folder.
+Anthropic: prompt caching and the server-side refusal fallback were easy wins; Sonnet 5.5 as the brain with Haiku 5.5 for fast paths kept costs low.
 ```
 
 ### AI tools used this weekend
