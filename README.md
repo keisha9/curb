@@ -44,6 +44,7 @@ Medi-Cal covers rides to medical appointments (NEMT and NMT), but booking runs t
 | [docs/08-PRIZES-AND-SUBMISSION.md](docs/08-PRIZES-AND-SUBMISSION.md) | Prize fit, judging criteria, README and Devpost checklist |
 | [docs/09-RISKS-AND-RESPONSIBLE-USE.md](docs/09-RISKS-AND-RESPONSIBLE-USE.md) | Failure modes, privacy, authorization |
 | [docs/10-OPEN-DECISIONS.md](docs/10-OPEN-DECISIONS.md) | Defaults chosen, items to verify, questions still open |
+| [docs/11-DEVPOST-VIDEO-SCRIPT.md](docs/11-DEVPOST-VIDEO-SCRIPT.md) | Shot-by-shot script for the Devpost video, with the broker cue card |
 
 ## Naming
 
