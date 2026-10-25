@@ -542,9 +542,16 @@ export async function runScripted(run: BrainRun): Promise<void> {
           await decide("Ride needs a person; making sure the rider was told.");
           await sms("needs_human");
           return;
-        case "booked":
+        case "booked": {
           if (call.role === "broker_inbound") {
-            await decide("Broker call-in ended without a delay on record; nothing to do.");
+            const onCall = [...c.reports].reverse().find((r) => r.callId === call._id && r.evaluation);
+            if (onCall?.evaluation?.action === "verify_with_broker") {
+              await decide("Broker reported a late driver but gave no time; calling the broker back for the driver's status.");
+              const res = await executeTool(run, "place_broker_call", { mode: "delay_recovery" });
+              if (!res.ok) await humanAndTell(`could not place the status call (${(res.result as { error: string }).error})`);
+            } else {
+              await decide("Broker call-in ended without a delay on record; nothing to do.");
+            }
             return;
           }
           await humanAndTell(
@@ -553,6 +560,7 @@ export async function runScripted(run: BrainRun): Promise<void> {
               : "status check with the broker gave no new information",
           );
           return;
+        }
         default:
           await decide(`Call ended while the ride is ${ride.status}; no action.`);
           return;

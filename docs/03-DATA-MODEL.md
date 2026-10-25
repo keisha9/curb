@@ -206,11 +206,12 @@ Projected pickup = `newEstimatedPickupAt` if given, else `pickupWindowStart + de
 | 1 | Ride has no booked pickup window | `reject` (reasonCode `no_booked_ride`) |
 | 2 | Ride status is `replacement_booked` | `escalate_to_human` (the replacement is also delayed) |
 | 3 | Projected pickup is more than the threshold past `pickupWindowStart` | `request_urgent_replacement` |
-| 4 | Rider report, projected pickup unknown, and now is more than the threshold past `pickupWindowStart` | `request_urgent_replacement` |
-| 5 | Rider report, projected pickup unknown, and now is within the threshold | `verify_with_broker` (agent asks the broker for driver status; the obligation is not invoked yet) |
+| 4 | Rider or broker report (not `ops_dashboard`), projected pickup unknown, and now is more than the threshold past `pickupWindowStart` | `request_urgent_replacement` |
+| 5 | Rider or broker report (not `ops_dashboard`), projected pickup unknown, and now is within the threshold | `verify_with_broker` (agent asks the broker for driver status or a time; the obligation is not invoked yet) |
+| 5b | `ops_dashboard` report with projected pickup unknown | `verify_with_broker` (reasonCode `no_eta_simulated`). Simulated reports are never judged by the clock, because the demo ride's window rarely matches the real time of the demo |
 | 6 | Anything else (an ETA within the threshold) | `notify_rider_only` |
 
-Duplicate reports from the same channel within 2 minutes are ignored (logged, not re-evaluated).
+Duplicate reports from the same channel within 2 minutes are ignored (logged, not re-evaluated), unless they add new information (different minutes or ETA), such as a broker answering "how late?" on the same call.
 
 ## 4. Seed data (`demo:seed`)
 

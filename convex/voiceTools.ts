@@ -399,6 +399,8 @@ export const reportDelayBroker = internalMutation({
       say = "This is already the replacement ride. Thank the broker and say a person will follow up with the member.";
     } else if (result.evaluation?.action === "reject") {
       say = "That ride has no booked pickup on record. Thank the broker and say you will follow up.";
+    } else if (result.evaluation?.action === "verify_with_broker") {
+      say = "No delay time was given, and the driver is still within the plan's wait time. Ask the broker how many minutes late the driver is, or the new estimated arrival, then call report_delay again with it.";
     } else {
       say = "Within the plan's wait time, so no replacement is needed. Thank the broker. The member will be told the new estimated pickup.";
     }

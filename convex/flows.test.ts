@@ -376,3 +376,108 @@ describe("rider website scoping", () => {
     expect(await t.query(api.portal.trips, { token: jamesToken })).toBeNull();
   });
 });
+
+describe("English end to end (James)", () => {
+  test("book -> rider calls, no minutes, past the threshold -> replacement -> English callback and SMS", async () => {
+    const { t, settle } = setup();
+    await t.mutation(api.demo.seed, {});
+    await t.action(internal.sim.riderBooks, { phone: JAMES, appointmentAt: APPT });
+    await settle();
+    const rideId = (await rideFor(t, JAMES))._id;
+    expect((await rideFor(t, JAMES)).language).toBe("en");
+    await t.action(internal.sim.brokerConfirmsBooking, { rideId, confirmationNumber: "OC-1234", ...WINDOW });
+    await settle();
+
+    // 7:50 AM, 20 minutes into the window: the clock alone crosses the threshold.
+    vi.setSystemTime(new Date("2026-10-24T14:50:00Z"));
+    const r = (await t.action(internal.sim.riderReportsDelay, { phone: JAMES })) as { action: string };
+    expect(r.action).toBe("request_urgent_replacement");
+    await settle();
+    await t.action(internal.sim.brokerAnswersDelayCall, {
+      rideId,
+      replacementConfirmationNumber: "OC-1235",
+      replacementWindowStart: "2026-10-24T08:10",
+      replacementWindowEnd: "2026-10-24T08:20",
+    });
+    await settle();
+
+    expect((await rideFor(t, JAMES)).status).toBe("replacement_booked");
+    const bodies = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("messages")
+          .withIndex("by_ride", (q) => q.eq("rideId", rideId))
+          .collect()
+      ).map((m) => `${m.language} ${m.body}`),
+    );
+    expect(bodies[0]).toMatch(/^en Your ride to Demo Dialysis Center is booked\. Pickup .*7:30 AM - 7:45 AM\. Confirmation OC-1234\. See your trips: /);
+    expect(bodies[1]).toBe("en We got your report that your driver is late. We are contacting the ride company now.");
+    expect(bodies[2]).toMatch(/^en Your driver was late\. A replacement ride is coming\. New pickup .*8:10 AM - 8:20 AM\. Confirmation OC-1235\./);
+    const callback = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("calls")
+          .withIndex("by_ride", (q) => q.eq("rideId", rideId))
+          .collect()
+      ).find((c) => c.role === "rider_callback"),
+    );
+    expect(callback?.language).toBe("en");
+  });
+});
+
+describe("clock rules for broker reports", () => {
+  async function brokerCallIn(t: T) {
+    const route = await t.mutation(internal.voiceTools.routeInbound, { vapiCallId: `v_${Math.random()}`, callerNumber: BROKER });
+    await t.mutation(internal.voiceTools.lookupRide, { callId: route.callId, confirmationNumber: "TR-4821" });
+    return route.callId;
+  }
+
+  test("broker says the driver is late with no time, past the threshold -> urgent replacement", async () => {
+    const { t, settle } = setup();
+    await bookMaria(t, settle);
+    vi.setSystemTime(new Date("2026-10-24T14:50:00Z")); // 20 min into the window
+    const callId = await brokerCallIn(t);
+    const r = await t.mutation(internal.voiceTools.reportDelayBroker, { callId });
+    expect(r.say).toContain("urgent replacement");
+    expect((await rideFor(t, MARIA)).status).toBe("recovery_calling");
+  });
+
+  test("within the threshold: agent asks for a time, and the follow-up on the same call is not a duplicate", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(new Date("2026-10-24T14:35:00Z")); // 5 min into the window
+    const callId = await brokerCallIn(t);
+    const first = await t.mutation(internal.voiceTools.reportDelayBroker, { callId });
+    expect(first.say).toContain("Ask the broker how many minutes late");
+    expect((await rideFor(t, MARIA)).status).toBe("booked");
+
+    const second = await t.mutation(internal.voiceTools.reportDelayBroker, { callId, delayMinutes: 25 });
+    expect(second.say).toContain("urgent replacement");
+    const reports = await t.query(api.delays.byRide, { rideId });
+    expect(reports.map((x) => [x.ignoredReason ?? "evaluated", x.evaluation?.action])).toEqual([
+      ["evaluated", "verify_with_broker"],
+      ["evaluated", "request_urgent_replacement"],
+    ]);
+  });
+
+  test("call-in ends with no time given -> brain calls the broker back for status", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(new Date("2026-10-24T14:35:00Z"));
+    const callId = await brokerCallIn(t);
+    await t.mutation(internal.voiceTools.reportDelayBroker, { callId });
+    await t.mutation(internal.calls.end, { callId });
+    await settle();
+    expect(await callsOf(t, rideId)).toContainEqual({ role: "broker_delay", status: "ringing", policyAction: "verify_with_broker" });
+  });
+
+  test("dashboard reports with no time are not judged by the clock, even long past the window", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(new Date("2026-10-24T15:30:00Z")); // an hour into the window
+    const res = await t.mutation(internal.delays.report, { rideId, reportedBy: "rider", channel: "ops_dashboard" });
+    expect(res.evaluation?.action).toBe("verify_with_broker");
+    expect(res.evaluation?.reasonCode).toBe("no_eta_simulated");
+    expect((await rideFor(t, MARIA)).status).toBe("booked");
+  });
+});

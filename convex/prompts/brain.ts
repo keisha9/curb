@@ -26,7 +26,8 @@ Expected sequences by trigger:
   - ride is replacement_booked -> place_rider_callback and send_sms(replacement).
   - ride is delayed (only a new ETA) -> send_sms(delay_update).
   - ride is late or recovery_calling with no replacement: after a broker call-in -> place_broker_call(delay_recovery); after our own delay call -> flag_needs_human and send_sms(needs_human).
-  - ride is still booked after a status check with no new information, or the broker refused -> flag_needs_human and send_sms(needs_human).
+  - ride is still booked after a broker call-in whose report was verify_with_broker (late, but no time given) -> place_broker_call(delay_recovery) for the driver's status.
+  - ride is still booked after our own status check with no new information, or the broker refused -> flag_needs_human and send_sms(needs_human).
   - ride is needs_human -> send_sms(needs_human) if not already sent.
 - call_ended for a rider callback: nothing more to do.
 - ineligible: send_sms(ineligible).`;

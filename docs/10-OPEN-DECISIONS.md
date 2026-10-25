@@ -90,6 +90,6 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | 2026-10-24 | Times without an offset from voice tools are read as America/Los_Angeles (`TIME_ZONE` in `shared/config.ts`) | Assistants speak in the rider's local time |
 | 2026-10-24 | Seed brokers: "Call the Car (mock)" for L.A. Care, "Orange County Rides (mock)" for CalOptima | Avoid naming a real broker before verifying it (section 4) |
 
-## 6. New questions from the build
-
-1. A **broker** report with neither minutes nor an ETA falls to rule 6 (`notify_rider_only`) as `03` is written; rules 4 and 5 apply only to rider reports. Is that intended, or should a broker saying "the driver is late" with no number also be checked against the clock?
+| 2026-10-24 | Clock-based delay rules (03 rules 4-5) apply to rider **and broker** reports, but not to `ops_dashboard` reports; a dashboard report with no time gets `verify_with_broker` | Decided by you. Simulated reports should not depend on the real clock |
+| 2026-10-24 | A repeat report from the same channel within 2 minutes is a duplicate only if it carries the same minutes and ETA | Lets the broker answer "how late?" on the same call after a no-time report |
+| 2026-10-24 | When a broker call-in ends with only `verify_with_broker` (late, no time), the brain calls the broker back for driver status | Same pattern as the call-in with no replacement arranged |

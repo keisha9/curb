@@ -61,6 +61,7 @@ export type DelayReasonCode =
   | "projected_past_threshold"
   | "not_arrived_past_threshold"
   | "not_arrived_within_threshold"
+  | "no_eta_simulated"
   | "within_threshold";
 
 export type DelayEvaluation = {
@@ -75,9 +76,19 @@ export type DelayEvaluation = {
 export type DelayRide = { status: string; pickupWindowStart?: number };
 export type DelayReport = {
   reportedBy: "rider" | "broker";
+  channel?: "rider_call" | "rider_web" | "broker_call" | "ops_dashboard";
   delayMinutes?: number;
   newEstimatedPickupAt?: number;
 };
+
+/**
+ * Whether a report with no minutes and no ETA may be judged against the clock.
+ * Real reports from the rider or the broker can. Simulated dashboard reports cannot:
+ * the demo ride's pickup window rarely lines up with the real time of the demo.
+ */
+function usesClock(report: DelayReport): boolean {
+  return report.channel !== "ops_dashboard";
+}
 
 /** Statuses in which a ride has a live booking that can be late. */
 const BOOKED_STATUSES = new Set(["booked", "delayed", "late", "recovery_calling", "replacement_booked"]);
@@ -122,25 +133,41 @@ export function evaluateDelay(
   if (projected !== null && minutesPast > thresholdMinutes) {
     return result("request_urgent_replacement", "projected_past_threshold", minutesPast, projected);
   }
-  if (projected === null && report.reportedBy === "rider") {
-    // 4. Driver has not arrived and we are past the threshold
-    if (minutesPast > thresholdMinutes) {
-      return result("request_urgent_replacement", "not_arrived_past_threshold", minutesPast, null);
+  if (projected === null) {
+    if (usesClock(report)) {
+      // 4. Driver has not arrived and we are past the threshold (rider or broker report)
+      if (minutesPast > thresholdMinutes) {
+        return result("request_urgent_replacement", "not_arrived_past_threshold", minutesPast, null);
+      }
+      // 5. Driver has not arrived but we are still within the threshold: only ask the broker
+      return result("verify_with_broker", "not_arrived_within_threshold", minutesPast, null);
     }
-    // 5. Driver has not arrived but we are still within the threshold: only ask the broker
-    return result("verify_with_broker", "not_arrived_within_threshold", minutesPast, null);
+    // 5b. Simulated report with no minutes or ETA: never judged by the clock; ask the broker
+    return result("verify_with_broker", "no_eta_simulated", null, null);
   }
   // 6. Anything else (an ETA within the threshold)
   return result("notify_rider_only", "within_threshold", minutesPast, projected);
 }
 
-/** True if an earlier report from the same channel makes this one a duplicate. */
+type ReportFacts = { channel: string; createdAt: number; delayMinutes?: number; newEstimatedPickupAt?: number };
+
+/**
+ * True if an earlier report from the same channel, inside the duplicate window, already
+ * said the same thing. A follow-up that adds minutes or an ETA (e.g. the broker answering
+ * "how late?" on the same call) is new information, not a duplicate.
+ */
 export function isDuplicateReport(
-  previous: { channel: string; createdAt: number }[],
-  channel: string,
+  previous: ReportFacts[],
+  report: Omit<ReportFacts, "createdAt">,
   now: number,
 ): boolean {
-  return previous.some((r) => r.channel === channel && now - r.createdAt < DUPLICATE_REPORT_WINDOW_MS);
+  return previous.some(
+    (r) =>
+      r.channel === report.channel &&
+      now - r.createdAt < DUPLICATE_REPORT_WINDOW_MS &&
+      r.delayMinutes === report.delayMinutes &&
+      r.newEstimatedPickupAt === report.newEstimatedPickupAt,
+  );
 }
 
 /**

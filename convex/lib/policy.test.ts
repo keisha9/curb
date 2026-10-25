@@ -75,6 +75,25 @@ describe("evaluateDelay", () => {
     const r = evaluateDelay(booked, { reportedBy: "rider" }, start + 5 * MINUTE);
     expect(r).toMatchObject({ action: "verify_with_broker", obligationApplies: false, reasonCode: "not_arrived_within_threshold" });
   });
+  test("rules 4-5 use the clock for broker reports too", () => {
+    expect(evaluateDelay(booked, { reportedBy: "broker", channel: "broker_call" }, start + (T + 1) * MINUTE)).toMatchObject({
+      action: "request_urgent_replacement",
+      reasonCode: "not_arrived_past_threshold",
+    });
+    expect(evaluateDelay(booked, { reportedBy: "broker", channel: "broker_call" }, start + 5 * MINUTE).action).toBe("verify_with_broker");
+  });
+  test("simulated dashboard reports are never judged by the clock", () => {
+    const late = start + 60 * MINUTE;
+    for (const reportedBy of ["rider", "broker"] as const) {
+      expect(evaluateDelay(booked, { reportedBy, channel: "ops_dashboard" }, late)).toMatchObject({
+        action: "verify_with_broker",
+        obligationApplies: false,
+        reasonCode: "no_eta_simulated",
+      });
+    }
+    // With minutes, the dashboard follows the same minute-based rules as everyone else.
+    expect(evaluateDelay(booked, { reportedBy: "broker", channel: "ops_dashboard", delayMinutes: 20 }, NOW).action).toBe("request_urgent_replacement");
+  });
   test("rule 6: ETA within the threshold -> notify rider only", () => {
     const r = evaluateDelay(booked, { reportedBy: "broker", delayMinutes: 10 }, NOW);
     expect(r).toMatchObject({ action: "notify_rider_only", obligationApplies: false, reasonCode: "within_threshold" });
@@ -90,12 +109,15 @@ describe("evaluateDelay", () => {
 });
 
 describe("duplicate reports", () => {
-  test("same channel within 2 minutes is a duplicate", () => {
-    expect(isDuplicateReport([{ channel: "rider_web", createdAt: NOW - MINUTE }], "rider_web", NOW)).toBe(true);
+  const prev = [{ channel: "rider_web", createdAt: NOW - MINUTE, delayMinutes: 10 }];
+  test("the same report from the same channel within 2 minutes is a duplicate", () => {
+    expect(isDuplicateReport(prev, { channel: "rider_web", delayMinutes: 10 }, NOW)).toBe(true);
   });
-  test("different channel or older than 2 minutes is not", () => {
-    expect(isDuplicateReport([{ channel: "rider_web", createdAt: NOW - MINUTE }], "broker_call", NOW)).toBe(false);
-    expect(isDuplicateReport([{ channel: "rider_web", createdAt: NOW - 3 * MINUTE }], "rider_web", NOW)).toBe(false);
+  test("different channel, older than 2 minutes, or new information is not", () => {
+    expect(isDuplicateReport(prev, { channel: "broker_call", delayMinutes: 10 }, NOW)).toBe(false);
+    expect(isDuplicateReport(prev, { channel: "rider_web", delayMinutes: 10 }, NOW + 2 * MINUTE)).toBe(false);
+    expect(isDuplicateReport(prev, { channel: "rider_web", delayMinutes: 25 }, NOW)).toBe(false);
+    expect(isDuplicateReport([{ channel: "broker_call", createdAt: NOW - MINUTE }], { channel: "broker_call", delayMinutes: 20 }, NOW)).toBe(false);
   });
 });
 

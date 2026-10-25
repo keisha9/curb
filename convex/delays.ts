@@ -71,8 +71,8 @@ export async function reportDelay(ctx: MutationCtx, input: DelayReportInput): Pr
     createdAt: now,
   };
 
-  // Repeat from the same channel within the duplicate window: log, do not re-evaluate.
-  if (isDuplicateReport(previous, input.channel, now)) {
+  // Same report again from the same channel within the duplicate window: log, do not re-evaluate.
+  if (isDuplicateReport(previous, input, now)) {
     const reportId = await ctx.db.insert("delayReports", { ...fields, ignoredReason: "duplicate" });
     await logEvent(ctx, {
       rideId: input.rideId,
