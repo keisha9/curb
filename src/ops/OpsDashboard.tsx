@@ -40,6 +40,10 @@ const KIND_STYLE: Record<string, string> = {
   error: "text-red-700",
 };
 
+// Presentation mode (/ops?present): masks phone numbers for screenshots and screen recordings.
+const PRESENT = new URLSearchParams(window.location.search).has("present");
+const maskPhones = (text: string) => (PRESENT ? text.replace(/\+1\d{6}(\d{4})/g, "+1 ••• ••• $1") : text);
+
 const fmt = (ts: number | undefined | null, withDay = false) =>
   ts == null
     ? "—"
@@ -215,7 +219,7 @@ function RideDetail({ rideId }: { rideId: Id<"rides"> }) {
             <li key={e._id} className="flex gap-3">
               <span className="shrink-0 text-slate-400">{fmt(e.createdAt)}</span>
               <span className={`w-28 shrink-0 ${KIND_STYLE[e.kind] ?? ""}`}>{e.kind.replace(/_/g, " ")}</span>
-              <span className="min-w-0 break-words">{e.summary}</span>
+              <span className="min-w-0 break-words">{maskPhones(e.summary)}</span>
             </li>
           ))}
         </ol>
@@ -257,10 +261,10 @@ function CallTranscript({ call }: { call: CallWithLines }) {
         {call.lines.map((l) => (
           <div key={l._id} className={`rounded-md border px-3 py-1.5 ${SPEAKER_STYLE[l.speaker] ?? ""}`}>
             <span className="mr-2 text-xs font-bold uppercase text-slate-500">{l.speaker}</span>
-            {l.text}
+            {maskPhones(l.text)}
           </div>
         ))}
-        {call.summary && <p className="pt-1 text-sm italic text-slate-500">{call.summary}</p>}
+        {call.summary && <p className="pt-1 text-sm italic text-slate-500">{maskPhones(call.summary)}</p>}
       </div>
     </div>
   );
@@ -399,7 +403,12 @@ function DemoControls({ rideId, delayMinutes, brokerLine }: { rideId: Id<"rides"
         <div>
           <div className="mb-1 text-sm font-semibold">Broker line</div>
           <div className="flex gap-2">
-            <input value={line} onChange={(e) => setLineDraft(e.target.value)} className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 font-mono text-sm" />
+            <input
+              value={PRESENT ? maskPhones(line) : line}
+              readOnly={PRESENT}
+              onChange={(e) => setLineDraft(e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 font-mono text-sm"
+            />
             <button onClick={() => run("Broker line", () => setLine({ opsKey: OPS_KEY, phone: line }))} className="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50">
               Save
             </button>

@@ -16,6 +16,10 @@ Medi-Cal covers rides to medical appointments (NEMT and NMT), but booking runs t
 4. **Rider trips website.** Opened from the link in the text message. Shows upcoming, current, and past trips, updates live, and has a "my driver is late" button.
 5. **Ops dashboard.** Demo controls, live call transcripts, ride status, and the agent's decision log.
 
+![Curb rescues a late ride](docs/media/1-rescue.png)
+
+More: [trips page](docs/media/2-trips-page.png) · [booking call](docs/media/3-booking-call.png) · [architecture](docs/media/4-architecture.png) · [rules in code](docs/media/5-policy-in-code.png)
+
 ## Stack
 
 | Layer | Choice |
