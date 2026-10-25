@@ -15,7 +15,7 @@ Curb books Medi-Cal rides to medical appointments by phone, and rescues the ride
 ```markdown
 ## Inspiration
 
-**[YOU: one or two sentences on who this is for and how you learned about the problem: a real conversation, a family experience, or a cited source. Do not invent one.]**
+Curb is for Medi-Cal members who depend on rides to recurring care, like dialysis, and for the caregivers and clinic schedulers who book those rides for them. We started by reading how the system actually works: the California Department of Health Care Services' guidance to Medi-Cal health plans on non-emergency transportation (APL 22-008) and its transportation FAQ. What stood out was how much of the work lands on the rider. Our demo rider, Maria, is fictional, but the steps she has to take are the ones that guidance describes.
 
 Medi-Cal covers rides to medical appointments, but booking one means calling the broker for your health plan, and every plan has its own. Ride paperwork quietly expires after 12 months. And when a driver is late, the rider is the one who has to call and wait on hold, while missing something like dialysis. The phone is the one channel every rider and every broker already uses, so we built an agent that works the phone for them.
 
