@@ -193,7 +193,9 @@ export const state = query({
   handler: async (ctx) => {
     const s = await ctx.db.query("demoState").first();
     const members = await ctx.db.query("members").collect();
+    const voice = await ctx.db.query("voiceConfig").first();
     return {
+      systemNumber: voice?.phoneNumber ?? null,
       delayMinutes: s?.delayMinutes ?? 20,
       brokerLine: s?.brokerLine ?? null,
       activeRideId: s?.activeRideId ?? null,

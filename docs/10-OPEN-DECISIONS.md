@@ -112,6 +112,10 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | 2026-10-24 | Inbound calls are matched by provider id, else by a live inbound call from the same number in the last 10 minutes | The call-started event and `identify_caller` may carry different ids |
 | 2026-10-24 | Verified event payloads: `call_turn` has one turn in `body`, `call_completed` the transcript array in `body`, numeric turn ids, `system` metric turns, summary in `analysis.summary` | First test call; regression test replays these shapes |
 
+| 2026-10-25 | Confirmation numbers are stored and compared as letters and digits only (`TR-4821`, `TR482-1`, `T R 4 8 2 1` are all `TR4821`) | Second test call: speech recognition heard TR-4821 as TR482-1, so the broker's call-in could not find the ride |
+| 2026-10-25 | Agents say rides cannot be changed on a call and point to the health plan's ride line | Second test call: the callback wrongly said changes are made on the trips page |
+| 2026-10-25 | The QR code encodes the dashboard's own address + `/trips?t=<token>`; for now the app runs on the laptop (`vite --host`) and the phone must be on the same Wi-Fi | No hosting yet. For demo day, deploy the web app or keep both devices on one network |
+
 ## 6. New questions from the build
 
-None open.
+1. Where should the web app be hosted for demo day (for example Vercel or Netlify), or is running it from the laptop on the venue Wi-Fi enough?
