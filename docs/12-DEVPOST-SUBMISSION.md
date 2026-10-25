@@ -57,10 +57,6 @@ Medi-Cal covers rides to medical appointments, but booking one means calling the
 - Log raw webhook payloads from day one; real payloads differed from my guesses.
 - Every agent needs a sentence about what it *cannot* do, or it will improvise one.
 
-## What's real and what's simulated
-
-The broker is a person reading a cue card, and every member, ID, and address is fake. The system can only call two allowlisted demo numbers. Text messages are turned off; riders hear updates by callback. The trips page link is a demo link scoped to one rider, not production authentication. Spanish support exists in the code and tests, but the live demo is English only.
-
 ## What's next for Curb
 
 - A partnership with a health plan, recorded member consent, and HIPAA agreements with every vendor in the call path.
