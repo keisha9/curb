@@ -2,7 +2,7 @@
 
 About 2:45. Follows `08-PRIZES-AND-SUBMISSION.md`: open with the delay being caught and the replacement, then the full flow, then problem, build, and honesty about what is mocked. Everything shown is the real system on real phones; the broker is a person reading a cue card, and all data is fake.
 
-`[COMMUNITY]` and `[SOURCE]` = your named community and the real conversation or cited source. **Do not record the problem section until these are real** (see `01-PRD.md` section 2).
+The problem section uses only what is true: the DHCS guidance read for this project, and a demo rider who is labeled fictional (`12-DEVPOST-SUBMISSION.md`, Inspiration).
 
 ---
 
