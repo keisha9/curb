@@ -2,7 +2,6 @@
 
 About 2:45. Follows `08-PRIZES-AND-SUBMISSION.md`: open with the delay being caught and the replacement, then the full flow, then problem, build, and honesty about what is mocked. Everything shown is the real system on real phones; the broker is a person reading a cue card, and all data is fake.
 
-`[NAME]` = the product name (still `PROJECT_NAME` in code; rename before recording so the voice says it).
 `[COMMUNITY]` and `[SOURCE]` = your named community and the real conversation or cited source. **Do not record the problem section until these are real** (see `01-PRD.md` section 2).
 
 ---
@@ -29,7 +28,7 @@ About 2:45. Follows `08-PRIZES-AND-SUBMISSION.md`: open with the delay being cau
 | Dashboard: the ride card turns orange, `late` → `recovery_calling`. Decision log line: *"evaluateDelay: request_urgent_replacement (projected_past_threshold, 20 min past window start, threshold 15)"* | Broker (on speaker): *"Confirmation TR-4821, the driver is running about 20 minutes late."* |
 | Transcript pane shows the agent's reply | Agent: *"Under the member's Medi-Cal plan rules… the plan must authorize an urgent replacement ride."* |
 | Status flips to `replacement_booked`; the phone's trips page updates on its own to *"A replacement ride is on the way"* | Rider's phone rings: *"Hi Maria… a replacement ride is on the way…"* |
-| Title card: **[NAME]** · *Books Medi-Cal rides by phone, and rescues them when the driver is late.* | VO: *"That was a late driver caught, and a replacement booked, without anyone waiting on hold. Here's the whole thing, from the start."* |
+| Title card: **Curb** · *Books Medi-Cal rides by phone, and rescues them when the driver is late.* | VO: *"That was a late driver caught, and a replacement booked, without anyone waiting on hold. Here's the whole thing, from the start."* |
 
 ---
 
@@ -37,7 +36,7 @@ About 2:45. Follows `08-PRIZES-AND-SUBMISSION.md`: open with the delay being cau
 
 | Screen | Audio |
 |---|---|
-| Dial **+1 (662) 780-2148** on the rider phone. Dashboard: *"Latest calls"* pane, transcript filling live | Agent: *"Hello, this is [NAME]."* … *"Hi Maria…"* |
+| Dial **+1 (662) 780-2148** on the rider phone. Dashboard: *"Latest calls"* pane, transcript filling live | Agent: *"Hello, this is Curb."* … *"Hi Maria…"* |
 | Transcript continues. Point at the dashboard: no ride exists until she asks for one | You (as Maria): *"I need a ride to dialysis tomorrow at 9. I use a wheelchair."* |
 | Decision log: *"paperworkStatus: PCS valid"* | Agent checks paperwork, then reads back day, time, destination, pickup address, wheelchair. *"Is that correct?"* You: *"Yes."* |
 | Ride card appears: `requested` → `calling_broker` | Agent: *"I'm calling the ride company now. We'll call you back with the pickup time."* |
@@ -62,7 +61,7 @@ VO over the broker call (keep it short): *"Maria never repeated her address or h
 
 | Screen | Audio |
 |---|---|
-| Broker phone calls **+1 (662) 780-2148** | Agent: *"Hello, this is [NAME]."* Broker: *"This is Call the Car. Confirmation TR-4821, the driver is running about 20 minutes late."* |
+| Broker phone calls **+1 (662) 780-2148** | Agent: *"Hello, this is Curb."* Broker: *"This is Call the Car. Confirmation TR-4821, the driver is running about 20 minutes late."* |
 | Dashboard: delay report *"Broker via broker call · 20 min late"*, then policy result *request_urgent_replacement*. Phone: trip moves to **Current**, turns orange | Agent cites the plan obligation and asks for an urgent replacement. Broker: *"Urgent ride arranged. Confirmation TR-4822. Pickup in 20 minutes."* |
 | Status `replacement_booked`; replacement row on the card; phone updates on its own | Agent reads back, thanks the broker |
 | Rider phone rings | Agent: *"…a replacement ride is on the way. Pickup … Confirmation T R 4 8 2 2."* |
@@ -77,7 +76,7 @@ VO: *"Either side can report a delay: the broker by calling in, or the rider by 
 
 Slide or face-to-camera. Fill in only with real facts.
 
-> *"[NAME] is for [COMMUNITY]. [SOURCE: one sentence on the real conversation or cited source.] Medi-Cal covers rides to medical appointments, but every plan has its own broker and phone line, ride paperwork quietly expires after 12 months, and when a driver is late the rider is the one who has to call and wait on hold, while missing something like dialysis."*
+> *"Curb is for [COMMUNITY]. [SOURCE: one sentence on the real conversation or cited source.] Medi-Cal covers rides to medical appointments, but every plan has its own broker and phone line, ride paperwork quietly expires after 12 months, and when a driver is late the rider is the one who has to call and wait on hold, while missing something like dialysis."*
 
 ---
 
@@ -99,7 +98,7 @@ On screen, the decision log scrolled up, then a short text card:
 
 > *"What's mocked: the broker is a person reading a cue card, and every record is fake. To run this for real you'd need a plan partnership, member consent, HIPAA agreements with every vendor, and real authentication for the trips page."*
 
-End card: **[NAME]** · repo link · *Built solo at Cal Hacks 13.0 with Cartesia, Convex, and Claude.*
+End card: **Curb** · repo link · *Built solo at Cal Hacks 13.0 with Cartesia, Convex, and Claude.*
 
 ---
 

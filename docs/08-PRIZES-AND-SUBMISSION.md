@@ -51,11 +51,11 @@ If you cite external numbers (hold times, no-show rates), cite the source in the
 - [ ] Opt in to each target prize in the submission form
 - [ ] Describe in the description how each sponsor tool is used (several prizes require this)
 - [ ] Team size and solo status correct
-- [ ] `PROJECT_NAME` replaced everywhere (README, Naming)
+- [x] Product name set to Curb everywhere (README, Naming)
 - [ ] Final check: run through the checklist in `06-BUILD-PLAN.md` section "Phase 6"
 
 ## 6. The Anthropic named-community paragraph (fill in with your facts)
 
-> Draft: "PROJECT_NAME is for [specific community]. [One sentence on how you learned about the problem: a conversation, a family experience, or a cited source.] It books Medi-Cal medical rides by phone and rescues late ones, whether the rider or the broker reports the delay. Claude decides what to do next, but eligibility and delay rules are decided by code. The agent confirms every ride with the rider and logs every decision."
+> Draft: "Curb is for [specific community]. [One sentence on how you learned about the problem: a conversation, a family experience, or a cited source.] It books Medi-Cal medical rides by phone and rescues late ones, whether the rider or the broker reports the delay. Claude decides what to do next, but eligibility and delay rules are decided by code. The agent confirms every ride with the rider and logs every decision."
 
 Do not claim an interview or personal experience that did not happen.

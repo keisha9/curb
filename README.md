@@ -1,6 +1,4 @@
-# PROJECT_NAME
-
-> `PROJECT_NAME` is a placeholder. See [Naming](#naming) to change it in one pass.
+# Curb
 
 A voice agent that books and rescues Medi-Cal medical rides by phone, plus a website where riders can see their trips.
 
@@ -48,19 +46,9 @@ Medi-Cal covers rides to medical appointments (NEMT and NMT), but booking runs t
 
 ## Naming
 
-The product name is a placeholder, written as `PROJECT_NAME` in every doc. To keep renaming cheap:
+The product is **Curb**. In code the name lives only in `shared/config.ts`, as `APP_NAME` (UI) and `APP_NAME_SPOKEN` (how voice agents say it); prompts use `{{appName}}`, filled from `APP_NAME_SPOKEN` by `cartesiaSetup:run`. Never hard-code it anywhere else. Infrastructure keeps generic names (repo `project-name`, agents `inbound-assistant`, `broker-caller`, `rider-callback-*`).
 
-- **Docs:** the literal token `PROJECT_NAME` is the only form of the name.
-- **Code:** the name lives in one file, `shared/config.ts`, as `APP_NAME` (UI, SMS) and `APP_NAME_SPOKEN` (how voice agents say it). Prompts use the `{{appName}}` variable, filled from `APP_NAME_SPOKEN`. Never hard-code the name anywhere else.
-- **Infrastructure:** use generic names where you can (repo folder `project-name`, assistants `rider-assistant`, `broker-caller`, `broker-inbound`) so nothing outside the doc token and the config file needs to change.
-
-To rename:
-
-```bash
-grep -rl PROJECT_NAME . | xargs sed -i 's/PROJECT_NAME/YourName/g'   # macOS: sed -i ''
-```
-
-Then confirm `shared/config.ts` updated, and listen to how Cartesia says the new name in English and Spanish. If it sounds wrong, change only `APP_NAME_SPOKEN`.
+To rename: change `shared/config.ts`, run `npx convex run cartesiaSetup:run` so the agents pick it up, and listen to how the voice says it. If it sounds wrong, change only `APP_NAME_SPOKEN`.
 
 ## Setup
 

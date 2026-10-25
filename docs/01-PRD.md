@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-PROJECT_NAME is a phone-based agent for Medi-Cal non-emergency medical transportation (NEMT and NMT). A rider (or caregiver) calls one number and asks for a ride in English or Spanish. The agent books it with the rider's plan broker and texts a confirmation with a link to a trips website. If the driver is late, either the rider or the broker can report the delay. Deterministic policy code decides whether the plan's urgent-replacement obligation applies; if it does, the agent obtains a replacement ride, and the rider is kept informed either way.
+Curb is a phone-based agent for Medi-Cal non-emergency medical transportation (NEMT and NMT). A rider (or caregiver) calls one number and asks for a ride in English or Spanish. The agent books it with the rider's plan broker and texts a confirmation with a link to a trips website. If the driver is late, either the rider or the broker can report the delay. Deterministic policy code decides whether the plan's urgent-replacement obligation applies; if it does, the agent obtains a replacement ride, and the rider is kept informed either way.
 
 ## 2. Named community and problem
 

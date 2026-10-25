@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-You are helping one developer build PROJECT_NAME for Cal Hacks 13.0. Speed and a working live demo matter more than completeness. Read `docs/` before making architectural choices.
+You are helping one developer build Curb for Cal Hacks 13.0. Speed and a working live demo matter more than completeness. Read `docs/` before making architectural choices.
 
 ## What this project is
 
@@ -44,8 +44,8 @@ Two web UIs share one React app: `/ops` (demo controls, transcripts, decision lo
 
 ```ts
 // shared/config.ts
-export const APP_NAME = "PROJECT_NAME";
-export const APP_NAME_SPOKEN = "PROJECT_NAME"; // how voice agents say it; check pronunciation in English and Spanish
+export const APP_NAME = "Curb";
+export const APP_NAME_SPOKEN = "Curb"; // how voice agents say it; check pronunciation in English and Spanish
 ```
 
 ## Commands

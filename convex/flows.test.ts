@@ -621,7 +621,7 @@ describe("Cartesia webhooks (payload shapes from a real call)", () => {
     const idRes = await post(t, "/voice/tools/identify_caller", JSON.stringify({ conversation_id: "conv_other", caller_id: MARIA }), { Authorization: `Bearer ${SECRET}` });
     expect(await idRes.text()).toContain("Caller is the member Maria Gonzalez");
 
-    const turn1 = { id: 1, role: "assistant", text: "Hello, this is PROJECT_NAME.", start_timestamp: 0.2, end_timestamp: 2.1, was_interrupted: false };
+    const turn1 = { id: 1, role: "assistant", text: "Hello, this is Curb.", start_timestamp: 0.2, end_timestamp: 2.1, was_interrupted: false };
     const turn2 = { id: 2, role: "user", text: "Um, I'm Maria.", start_timestamp: 3, end_timestamp: 4, was_interrupted: false };
     const metric = { role: "system", log_metric: { name: "llm_first_text_ms", value: 1193 } };
     const toolTurn = { id: 3, role: "assistant", tool_calls: [{ name: "identify_caller", arguments: {}, result: "..." }] };
@@ -634,7 +634,7 @@ describe("Cartesia webhooks (payload shapes from a real call)", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ role: "rider_inbound", status: "ended", answered: true, summary: "Maria asked for a ride." });
     const lines = await t.run(async (ctx) => await ctx.db.query("transcriptLines").collect());
-    expect(lines.map((l) => `${l.speaker}: ${l.text}`)).toEqual(["agent: Hello, this is PROJECT_NAME.", "rider: Um, I'm Maria."]);
+    expect(lines.map((l) => `${l.speaker}: ${l.text}`)).toEqual(["agent: Hello, this is Curb.", "rider: Um, I'm Maria."]);
     const errors = await t.run(async (ctx) => (await ctx.db.query("agentEvents").collect()).filter((e) => e.kind === "error"));
     expect(errors).toEqual([]);
   });

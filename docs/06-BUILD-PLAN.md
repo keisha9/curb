@@ -80,7 +80,7 @@ Choose **one**: will-call return ride (F11), expiration cron with alert (F12, al
 - [ ] **Record a backup video as soon as the main flow works**, full flow, then re-record later if possible
 - [ ] Devpost text, prize opt-ins, screenshots (ops dashboard and rider website)
 - [ ] Rehearse the 2-minute demo at least 3 times with the human broker cue card
-- [ ] Replace `PROJECT_NAME` everywhere (see README, Naming)
+- [x] Product name set (Curb)
 - [ ] Final checks: no secrets in repo, allowlist in place, fake data only
 
 ## Cut lines (in order)

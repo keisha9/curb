@@ -15,7 +15,7 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | Delay reporting | Both the rider and the broker can report a delay |
 | Web surfaces | Ops dashboard for controls, plus a website where riders see past, current, and upcoming trips |
 | Time allocations in docs | Removed |
-| Product name | Placeholder `PROJECT_NAME`, easy to change (see README, Naming) |
+| Product name | **Curb** (2026-10-25) |
 | Section 2 defaults | All accepted as-is (2026-10-24) |
 | Repo | `project-name`, public on GitHub |
 | SMS | Off for now (2026-10-24): the trips website shows updates, and the rider gets a callback. Texts are still recorded and will send if Twilio is set |
@@ -43,7 +43,7 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | Website shows plain-language status and timeline only, never transcripts or the decision log | Privacy and clarity | Show call summaries or transcripts |
 | Trip grouping: Current includes any delayed or recovering trip and any booked trip starting within 2 hours | Makes the trip visibly move during the demo | Different rule |
 | Ops dashboard has no login (demo only) | Speed | Basic auth or Auth0 |
-| Product name lives in `shared/config.ts` as `APP_NAME` and `APP_NAME_SPOKEN`, prompts use `{{appName}}`, docs use `PROJECT_NAME` | One-pass rename | |
+| Product name lives in `shared/config.ts` as `APP_NAME` and `APP_NAME_SPOKEN`, prompts use `{{appName}}` | One-place rename | |
 
 ## 3. Questions still open
 

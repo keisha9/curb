@@ -4,10 +4,12 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { OpsDashboard } from "./ops/OpsDashboard";
 import { TripsSite } from "./trips/TripsSite";
+import { APP_NAME } from "../shared/config";
 import "./index.css";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 const TRIPS_ONLY = import.meta.env.VITE_TRIPS_ONLY === "1";
+document.title = APP_NAME;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
