@@ -74,9 +74,9 @@ VO: *"Either side can report a delay: the broker by calling in, or the rider by 
 
 ## 1:55 – 2:15 · Problem and who it's for
 
-Slide or face-to-camera. Fill in only with real facts.
+Slide or face-to-camera.
 
-> *"Curb is for [COMMUNITY]. [SOURCE: one sentence on the real conversation or cited source.] Medi-Cal covers rides to medical appointments, but every plan has its own broker and phone line, ride paperwork quietly expires after 12 months, and when a driver is late the rider is the one who has to call and wait on hold, while missing something like dialysis."*
+> *"Curb is for Medi-Cal members who depend on rides to recurring care, like dialysis, and the caregivers who book for them. I started from the state's own guidance to Medi-Cal plans on medical transportation. Every plan has its own broker and phone line, ride paperwork quietly expires after 12 months, and when a driver is late, the rider is the one who has to call and wait on hold, while missing something like dialysis. Maria is fictional; the steps she has to take are not."*
 
 ---
 
@@ -98,7 +98,7 @@ On screen, the decision log scrolled up, then a short text card:
 
 > *"What's mocked: the broker is a person reading a cue card, and every record is fake. To run this for real you'd need a plan partnership, member consent, HIPAA agreements with every vendor, and real authentication for the trips page."*
 
-End card: **Curb** · repo link · *Built solo at Cal Hacks 13.0 with Cartesia, Convex, and Claude.*
+End card: **Curb** · github.com/keisha9/curb · *Built solo at Cal Hacks 13.0 with Cartesia, Convex, and Claude.*
 
 ---
 
