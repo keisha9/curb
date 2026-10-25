@@ -75,7 +75,7 @@ typescript, react, vite, tailwindcss, convex, cartesia, cartesia-sonic, cartesia
 
 ## "Try it out" links
 
-- Code: https://github.com/keisha9/project-name
+- Code: https://github.com/keisha9/curb
 
 Not listed on purpose: the trips page needs a per-rider link (without one it only shows "link not valid"), and the phone number would let anyone place calls that spend agent credit.
 

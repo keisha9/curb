@@ -47,7 +47,7 @@ Medi-Cal covers rides to medical appointments (NEMT and NMT), but booking runs t
 
 ## Naming
 
-The product is **Curb**. In code the name lives only in `shared/config.ts`, as `APP_NAME` (UI) and `APP_NAME_SPOKEN` (how voice agents say it); prompts use `{{appName}}`, filled from `APP_NAME_SPOKEN` by `cartesiaSetup:run`. Never hard-code it anywhere else. Infrastructure keeps generic names (repo `project-name`, agents `inbound-assistant`, `broker-caller`, `rider-callback-*`).
+The product is **Curb**. In code the name lives only in `shared/config.ts`, as `APP_NAME` (UI) and `APP_NAME_SPOKEN` (how voice agents say it); prompts use `{{appName}}`, filled from `APP_NAME_SPOKEN` by `cartesiaSetup:run`. Never hard-code it anywhere else. Infrastructure keeps generic names (repo `curb`, agents `inbound-assistant`, `broker-caller`, `rider-callback-*`).
 
 To rename: change `shared/config.ts`, run `npx convex run cartesiaSetup:run` so the agents pick it up, and listen to how the voice says it. If it sounds wrong, change only `APP_NAME_SPOKEN`.
 
@@ -84,7 +84,7 @@ npm run dev        # prints a Local and a Network URL
 - **Ops dashboard:** `/ops`: ride board, live call transcripts, delay reports, decision log, demo controls, and a **QR code** for a rider's trips page.
 - **Rider trips site:** `/trips?t=<token>`: opened by scanning that QR code.
 
-The trips site is hosted on GitHub Pages at https://keisha9.github.io/project-name/trips/ (deployed on every push to `main`), so the QR code works on any network. The ops dashboard runs only locally and needs `VITE_OPS_KEY` in your `.env` to match `OPS_KEY` on Convex (`npx convex env set OPS_KEY ...`).
+The trips site is hosted on GitHub Pages at https://keisha9.github.io/curb/trips/ (deployed on every push to `main`), so the QR code works on any network. The ops dashboard runs only locally and needs `VITE_OPS_KEY` in your `.env` to match `OPS_KEY` on Convex (`npx convex env set OPS_KEY ...`).
 
 ### Try the flow in text (Phase 1)
 

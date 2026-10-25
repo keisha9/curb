@@ -29,7 +29,7 @@ jobs:
           # The Convex client URL is public by design (it ships in every browser bundle).
           VITE_CONVEX_URL: https://keen-meerkat-598.convex.cloud
           VITE_TRIPS_ONLY: "1"
-          BASE_PATH: /project-name/
+          BASE_PATH: /curb/
       # Pages has no SPA rewrites: a real /trips/ page (200), plus 404.html as the fallback.
       - run: mkdir -p dist/trips && cp dist/index.html dist/trips/index.html && cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3

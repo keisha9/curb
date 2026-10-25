@@ -17,7 +17,7 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | Time allocations in docs | Removed |
 | Product name | **Curb** (2026-10-25) |
 | Section 2 defaults | All accepted as-is (2026-10-24) |
-| Repo | `project-name`, public on GitHub |
+| Repo | `curb`, public on GitHub (renamed from `project-name`) |
 | SMS | Off for now (2026-10-24): the trips website shows updates, and the rider gets a callback. Texts are still recorded and will send if Twilio is set |
 | Seed phone numbers | Placeholders via Convex env vars (`DEMO_MARIA_PHONE`, `DEMO_JAMES_PHONE`, `DEMO_ROSA_PHONE`, `DEMO_BROKER_PHONE`); fictional 555-01xx numbers until set |
 
@@ -116,7 +116,7 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | 2026-10-25 | Agents say rides cannot be changed on a call and point to the health plan's ride line | Second test call: the callback wrongly said changes are made on the trips page |
 | 2026-10-25 | The QR code encodes the dashboard's own address + `/trips?t=<token>`; for now the app runs on the laptop (`vite --host`) and the phone must be on the same Wi-Fi | No hosting yet. For demo day, deploy the web app or keep both devices on one network |
 
-| 2026-10-25 | Rider trips site hosted free on GitHub Pages (https://keisha9.github.io/project-name/trips/), built by `.github/workflows/pages.yml` with `VITE_TRIPS_ONLY=1`; the ops dashboard stays local | Decided by you: anyone can scan the QR code |
+| 2026-10-25 | Rider trips site hosted free on GitHub Pages (https://keisha9.github.io/curb/trips/), built by `.github/workflows/pages.yml` with `VITE_TRIPS_ONLY=1`; the ops dashboard stays local | Decided by you: anyone can scan the QR code |
 | 2026-10-25 | Ops dashboard queries and demo controls require `OPS_KEY` (local `VITE_OPS_KEY`) | The repo and Convex URL are public; without it anyone could read real demo phone numbers and transcripts, reset data, or trigger real calls |
 
 ## 6. New questions from the build
