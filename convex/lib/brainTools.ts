@@ -21,7 +21,7 @@ import {
   type SmsTemplate,
 } from "./wording";
 
-export type BrainTrigger = "new_request" | "call_ended" | "delay_reported" | "ineligible";
+export type BrainTrigger = "new_request" | "call_ended" | "delay_reported" | "ineligible" | "retry_call";
 
 export const MAX_BROKER_CALLS_PER_TRIGGER = 2;
 
@@ -348,7 +348,8 @@ export async function executeTool(run: BrainRun, name: string, input: unknown): 
         out = fail(`no rider update to give while the ride is ${c.ride.status}`);
         break;
       }
-      if (c.calls.some((x) => x.role === "rider_callback" && x.updateText === update.text)) {
+      // A missed callback does not count as heard; anything else with the same words does.
+      if (c.calls.some((x) => x.role === "rider_callback" && x.updateText === update.text && x.answered !== false)) {
         out = { ok: true, result: { skipped: "the rider was already called with this exact update" } };
         break;
       }
@@ -588,5 +589,95 @@ export async function runScripted(run: BrainRun): Promise<void> {
           return;
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Missed calls: deterministic, no model. A call is missed if it failed or the other side
+// never spoke. Each missed call gets one retry after a short wait; then a person (broker
+// calls) or a "not reached" note (rider callbacks, whose update is on the trips page).
+// ---------------------------------------------------------------------------
+
+export const RETRY_DELAY_MS = {
+  broker_booking: 2 * 60_000,
+  broker_delay: 60_000, // the driver is already late
+  rider_callback: 3 * 60_000,
+} as const;
+
+type RetryRole = keyof typeof RETRY_DELAY_MS;
+
+function isRetryRole(role: string): role is RetryRole {
+  return role in RETRY_DELAY_MS;
+}
+
+/** How many calls of this kind already went out for the same purpose (including the missed one). */
+function attemptsFor(c: Context, call: BrainContext["calls"][number]): number {
+  switch (call.role) {
+    case "broker_booking":
+      return c.calls.filter((x) => x.role === "broker_booking").length;
+    case "broker_delay":
+      return c.calls.filter((x) => x.role === "broker_delay" && x.delayReportId === call.delayReportId).length;
+    default:
+      return c.calls.filter((x) => x.role === "rider_callback" && x.updateText === call.updateText).length;
+  }
+}
+
+/** Handles a call_ended trigger for a call nobody answered. Returns false if the call was answered. */
+export async function handleMissedCall(run: BrainRun): Promise<boolean> {
+  const c = await loadContext(run);
+  const call = c?.calls.find((x) => x._id === run.callId);
+  if (!c || !call || call.answered !== false || !isRetryRole(call.role)) return false;
+  const decide = (text: string) => executeTool(run, "record_decision", { text });
+  const who = call.role === "rider_callback" ? "The rider" : "The broker";
+
+  if (attemptsFor(c, call) < 2) {
+    const minutes = RETRY_DELAY_MS[call.role] / 60_000;
+    await decide(`${who} did not answer; calling again in ${minutes} minute${minutes === 1 ? "" : "s"}.`);
+    await run.ctx.scheduler.runAfter(RETRY_DELAY_MS[call.role], internal.brain.run, {
+      rideId: run.rideId,
+      trigger: "retry_call",
+      callId: call._id,
+      delayReportId: call.delayReportId,
+    });
+    return true;
+  }
+
+  if (call.role === "rider_callback") {
+    await decide("The rider did not answer two callbacks. The update is on their trips page.");
+    await run.ctx.runMutation(internal.events.log, {
+      rideId: run.rideId,
+      kind: "error",
+      summary: "Rider not reached by phone (two missed callbacks)",
+    });
+    return true;
+  }
+  await decide("The broker did not answer twice; a person needs to take over.");
+  await executeTool(run, "flag_needs_human", { reason: "broker did not answer two calls" });
+  await executeTool(run, "place_rider_callback", {});
+  await executeTool(run, "send_sms", { template: "needs_human" });
+  return true;
+}
+
+/** The scheduled retry of a missed call, if it is still needed. */
+export async function retryMissedCall(run: BrainRun): Promise<void> {
+  const c = await loadContext(run);
+  const call = c?.calls.find((x) => x._id === run.callId);
+  if (!c || !call) return;
+  const status = c.ride.status;
+  const decide = (text: string) => executeTool(run, "record_decision", { text });
+
+  if (call.role === "broker_booking") {
+    if (status !== "calling_broker") return void (await decide(`Retry not needed: the ride is now ${status}.`));
+    await decide("Retrying the booking call to the broker.");
+    await executeTool(run, "place_broker_call", { mode: "booking" });
+  } else if (call.role === "broker_delay") {
+    if (!["late", "recovery_calling", "booked", "delayed"].includes(status)) {
+      return void (await decide(`Retry not needed: the ride is now ${status}.`));
+    }
+    await decide("Retrying the delay call to the broker.");
+    await executeTool(run, "place_broker_call", { mode: "delay_recovery" });
+  } else if (call.role === "rider_callback") {
+    await decide("Retrying the callback to the rider.");
+    await executeTool(run, "place_rider_callback", {});
   }
 }

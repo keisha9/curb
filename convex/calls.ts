@@ -109,11 +109,18 @@ export const end = internalMutation({
   handler: async (ctx, { callId, summary, recordingUrl, error }) => {
     const call = await ctx.db.get(callId);
     if (!call || call.endedAt !== undefined) return;
-    await ctx.db.patch(callId, { status: error ? "failed" : "ended", endedAt: Date.now(), summary, recordingUrl, error });
+    const lines = await ctx.db
+      .query("transcriptLines")
+      .withIndex("by_call", (q) => q.eq("callId", callId))
+      .collect();
+    const answered = !error && lines.some((l) => l.speaker !== "agent");
+    await ctx.db.patch(callId, { status: error ? "failed" : "ended", endedAt: Date.now(), summary, recordingUrl, error, answered });
     await logEvent(ctx, {
       rideId: call.rideId,
       kind: error ? "error" : "call",
-      summary: error ? `${ROLE_LABEL[call.role]} failed: ${error}` : `${ROLE_LABEL[call.role]} ended${summary ? `: ${summary}` : ""}`,
+      summary: error
+        ? `${ROLE_LABEL[call.role]} failed: ${error}`
+        : `${ROLE_LABEL[call.role]} ended${answered ? "" : " (not answered)"}${summary ? `: ${summary}` : ""}`,
       payload: { callId },
     });
     if (call.rideId && BRAIN_ON_END.has(call.role)) {

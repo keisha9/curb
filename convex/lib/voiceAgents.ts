@@ -185,6 +185,8 @@ export function agentConfig(key: AgentKey, toolIds: Record<string, string>, even
     case "broker":
       return {
         ...base,
+        // Voicemail: hang up without a message; the brain retries the call later.
+        system_tools: { ...base.system_tools, voicemail_detection: {} },
         instructions: BROKER_CALLER_PROMPT,
         initial_message: BROKER_CALLER_INITIAL_MESSAGE,
         language: { primary: "en" },
@@ -193,6 +195,11 @@ export function agentConfig(key: AgentKey, toolIds: Record<string, string>, even
     case "callbackEn":
       return {
         ...base,
+        // Voicemail can be heard by others: no ride details, just ask for a call back.
+        system_tools: {
+          ...base.system_tools,
+          voicemail_detection: { message: `Hi, this is ${APP_NAME_SPOKEN} with an update about your ride. Please call us back at this number, or check your trips page.` },
+        },
         instructions: withName(RIDER_CALLBACK_PROMPT.en),
         initial_message: withName(RIDER_CALLBACK_INITIAL_MESSAGE.en),
         language: { primary: "en" },
@@ -201,6 +208,10 @@ export function agentConfig(key: AgentKey, toolIds: Record<string, string>, even
     case "callbackEs":
       return {
         ...base,
+        system_tools: {
+          ...base.system_tools,
+          voicemail_detection: { message: `Hola, le llama ${APP_NAME_SPOKEN} con una actualización sobre su transporte. Por favor llámenos a este número, o revise su página de viajes.` },
+        },
         instructions: withName(RIDER_CALLBACK_PROMPT.es),
         initial_message: withName(RIDER_CALLBACK_INITIAL_MESSAGE.es),
         language: { primary: "es" },

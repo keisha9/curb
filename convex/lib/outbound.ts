@@ -53,13 +53,15 @@ export async function placeCall(
     updateText: args.updateText,
   });
 
-  const config = cartesiaConfigured() ? await ctx.runQuery(internal.voiceConfig.get, {}) : null;
+  // OUTBOUND_MODE=stub keeps calls in the database even when Cartesia is set up (text testing).
+  const live = cartesiaConfigured() && process.env.OUTBOUND_MODE !== "stub";
+  const config = live ? await ctx.runQuery(internal.voiceConfig.get, {}) : null;
   if (!config || !config.fromNumberId) {
     await ctx.runMutation(internal.calls.setExternalCallId, { callId, externalCallId: `stub_${callId}` });
     await ctx.runMutation(internal.events.log, {
       rideId: args.rideId,
       kind: "call",
-      summary: `Stubbed ${args.role} call to ${args.to} (Cartesia not set up)`,
+      summary: `Stubbed ${args.role} call to ${args.to} (${live ? "no Cartesia number configured" : "Cartesia not set up or OUTBOUND_MODE=stub"})`,
       payload: { callId, variableValues: args.variableValues },
     });
     return { ok: true, callId, stubbed: true };

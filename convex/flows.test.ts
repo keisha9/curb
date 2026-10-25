@@ -495,3 +495,67 @@ describe("clock rules for broker reports", () => {
     expect((await rideFor(t, MARIA)).status).toBe("booked");
   });
 });
+
+describe("missed calls", () => {
+  async function endUnanswered(t: T, rideId: Id<"rides">, role: "broker_booking" | "broker_delay" | "rider_callback") {
+    const call = await t.query(internal.calls.openForRide, { rideId, role });
+    await t.mutation(internal.calls.end, { callId: call!._id });
+  }
+
+  test("broker misses the booking call twice -> retried once after 2 minutes, then a person", async () => {
+    const { t, settle } = setup();
+    await t.mutation(api.demo.seed, {});
+    await t.action(internal.sim.riderBooks, { phone: MARIA, appointmentAt: APPT });
+    await settle();
+    const rideId = (await rideFor(t, MARIA))._id;
+
+    await endUnanswered(t, rideId, "broker_booking");
+    await t.finishInProgressScheduledFunctions();
+    // The retry waits: nothing new before 2 minutes pass.
+    expect((await callsOf(t, rideId)).filter((c) => c.role === "broker_booking")).toHaveLength(1);
+    await settle();
+    expect((await callsOf(t, rideId)).filter((c) => c.role === "broker_booking")).toHaveLength(2);
+
+    await endUnanswered(t, rideId, "broker_booking");
+    await settle();
+    expect((await rideFor(t, MARIA)).status).toBe("needs_human");
+    expect((await callsOf(t, rideId)).filter((c) => c.role === "broker_booking")).toHaveLength(2);
+    expect((await callsOf(t, rideId)).map((c) => c.role)).toContain("rider_callback");
+  });
+
+  test("rider misses a callback -> one retry with the same update, then 'not reached'", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    await endUnanswered(t, rideId, "rider_callback");
+    await settle();
+    const callbacks = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("calls")
+          .withIndex("by_ride", (q) => q.eq("rideId", rideId))
+          .collect()
+      ).filter((c) => c.role === "rider_callback"),
+    );
+    expect(callbacks).toHaveLength(2);
+    expect(callbacks[1]!.updateText).toBe(callbacks[0]!.updateText);
+
+    await endUnanswered(t, rideId, "rider_callback");
+    await settle();
+    expect((await callsOf(t, rideId)).filter((c) => c.role === "rider_callback")).toHaveLength(2);
+    const log = await t.query(api.events.byRide, { rideId });
+    expect(log.some((e) => e.summary.includes("Rider not reached"))).toBe(true);
+    expect((await rideFor(t, MARIA)).status).toBe("booked"); // the ride itself is fine
+  });
+
+  test("broker misses the urgent delay call -> retried after 1 minute, not escalated at once", async () => {
+    const { t, settle } = setup();
+    const rideId = await bookMaria(t, settle);
+    vi.setSystemTime(DURING_WINDOW);
+    await t.mutation(api.demo.simulateDelay, { rideId, as: "rider", delayMinutes: 25 });
+    await settle();
+    await endUnanswered(t, rideId, "broker_delay");
+    await settle();
+    expect((await rideFor(t, MARIA)).status).toBe("recovery_calling");
+    expect((await callsOf(t, rideId)).filter((c) => c.role === "broker_delay")).toHaveLength(2);
+  });
+});

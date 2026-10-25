@@ -101,6 +101,12 @@ Keep this file current. Claude Code should add to it instead of deciding silentl
 | 2026-10-24 | Rider updates by callback: booking confirmed, new ETA (unless the rider reported it on the call), replacement, needs a person. The same update is never called in twice | SMS is off; the rider still has to hear the outcome (F8) |
 | 2026-10-24 | Shared secret `VOICE_WEBHOOK_SECRET` for both tool webhooks (bearer) and call events (`X-Webhook-Secret`); raw event payloads are kept in `webhookLog` | Cartesia supports both; payload field names still need checking against real calls |
 
+| 2026-10-24 | Rider gets the trips website link from a QR code on the ops dashboard | Decided by you. Built with the ops dashboard (Phase 4) |
+| 2026-10-24 | Demo numbers: rider (Maria) +14086905309, broker +12172005154; these two are the whole allowlist. System line +16627802148 (Cartesia) | Decided by you |
+| 2026-10-24 | Missed calls: a call is missed if it failed or the other side never spoke. One retry after 2 min (booking), 1 min (delay), 3 min (rider callback). Broker missed twice: needs a person and the rider is called. Rider missed twice: logged "not reached"; the update stays on the trips page | Handled in code, not by the model. Voicemail detection is on: no message for brokers, a generic call-back message (no ride details) for riders |
+| 2026-10-24 | `OUTBOUND_MODE=stub` keeps calls in the database even when Cartesia is set up | Lets the Claude brain be tested in text without ringing real phones |
+| 2026-10-24 | Demo members are upserted by their fake member ID, not phone | Changing a demo phone number updates the member instead of adding a second one |
+
 ## 6. New questions from the build
 
-1. Without SMS, how does the rider get the trips website link? Options: the callback reads a short link aloud, the ops dashboard shows a QR code to scan during the demo, or turn SMS on later.
+None open.

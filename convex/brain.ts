@@ -9,7 +9,16 @@ import { internalAction, type ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { brainTurn, llmConfigured } from "./lib/llm";
-import { BRAIN_TOOLS, executeTool, runScripted, summarizeContext, type BrainRun, type BrainTrigger } from "./lib/brainTools";
+import {
+  BRAIN_TOOLS,
+  executeTool,
+  handleMissedCall,
+  retryMissedCall,
+  runScripted,
+  summarizeContext,
+  type BrainRun,
+  type BrainTrigger,
+} from "./lib/brainTools";
 import { BRAIN_SYSTEM_PROMPT } from "./prompts/brain";
 import { extractCallOutcome } from "./extract";
 
@@ -83,7 +92,13 @@ async function runClaude(run: BrainRun): Promise<void> {
 export const run = internalAction({
   args: {
     rideId: v.id("rides"),
-    trigger: v.union(v.literal("new_request"), v.literal("call_ended"), v.literal("delay_reported"), v.literal("ineligible")),
+    trigger: v.union(
+      v.literal("new_request"),
+      v.literal("call_ended"),
+      v.literal("delay_reported"),
+      v.literal("ineligible"),
+      v.literal("retry_call"),
+    ),
     callId: v.optional(v.id("calls")),
     delayReportId: v.optional(v.id("delayReports")),
   },
@@ -99,6 +114,12 @@ export const run = internalAction({
       sideEffects: 0,
     };
     try {
+      // Missed calls and their retries need no judgment: handled in code, never by the model.
+      if (args.trigger === "retry_call") {
+        await retryMissedCall(run);
+        return;
+      }
+      if (args.trigger === "call_ended" && (await handleMissedCall(run))) return;
       if (args.trigger === "call_ended" && args.callId) await applyTranscriptFacts(ctx, args.rideId, args.callId);
 
       // Ineligible needs no judgment: always the fixed text.

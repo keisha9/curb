@@ -33,11 +33,9 @@ async function getDemoState(ctx: MutationCtx): Promise<Doc<"demoState">> {
 
 type SeedMember = Omit<Doc<"members">, "_id" | "_creationTime">;
 
+/** Upserted by the (fake) member ID, so changing a demo phone number updates the member in place. */
 async function upsertMember(ctx: MutationCtx, m: SeedMember): Promise<Id<"members">> {
-  const existing = await ctx.db
-    .query("members")
-    .withIndex("by_phone", (q) => q.eq("phone", m.phone))
-    .first();
+  const existing = (await ctx.db.query("members").collect()).find((x) => x.medicalId === m.medicalId);
   if (existing) {
     await ctx.db.replace(existing._id, m);
     return existing._id;

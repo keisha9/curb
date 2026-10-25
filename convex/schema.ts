@@ -161,6 +161,8 @@ export default defineSchema({
     delayReportId: v.optional(v.id("delayReports")),
     // Rider callbacks: the exact update spoken, so the same update is never called in twice.
     updateText: v.optional(v.string()),
+    // Set when the call ends: false if it failed or the other side never spoke (missed, unanswered).
+    answered: v.optional(v.boolean()),
     startedAt: v.optional(v.number()),
     endedAt: v.optional(v.number()),
     summary: v.optional(v.string()),
